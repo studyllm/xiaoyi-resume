@@ -155,10 +155,47 @@ Settings → Branches → Add rule → `main`：
 
 ### 验证保护是否生效
 
+`main` 的保护规则已开启并实测生效。探测方式（不要在正式提交上做）：
+
 ```bash
-# 直接推主干应当被拒
-git push origin main
+# 造一个只含空提交的探针分支并推上去
+git checkout -b probe/protection-check
+git commit --allow-empty -m "chore: 探测"
+git push origin probe/protection-check
+
+# 关键测试：把它快进推上主干
+git push origin probe/protection-check:main
 ```
+
+应当被拒，服务端返回：
+
+```
+remote: error: GH006: Protected branch update failed for refs/heads/main.
+remote: - Changes must be made through a pull request.
+```
+
+> **注意**：`git push --dry-run` **不会**触发 GitHub 的保护检查，干跑照样显示成功。判断保护是否生效要看真实推送的返回，或读 `gh api repos/<owner>/<repo>/branches/main --jq '.protected'`。
+
+探针用完记得清理：
+
+```bash
+gh pr close <n> --delete-branch
+git checkout main && git branch -D probe/protection-check
+```
+
+### 当前规则的实际状态
+
+2026-11-02 实测确认：
+
+| 项 | 状态 |
+| --- | --- |
+| 直推主干 | 被拒——必须经 PR |
+| 必需状态检查 | `verify`。PR 在它跑完前是 `BLOCKED`，通过后才解除 |
+| 必需评审 | 1 个 approving review。`verify` 通过后 PR 仍 `BLOCKED`，`reviewDecision` 为 `REVIEW_REQUIRED` |
+| 合并方式 | 只允许 squash merge |
+| 管理员绕过 | 状态检查的 `enforcement_level` 是 `non_admins`——管理员不受状态检查约束 |
+
+**这对日常协作的影响**：仓库只有一个人审阅时，每个 PR 都需要你点一次 Approve。若你不想审阅，`enforcement_level` 允许管理员绕过状态检查——但「需要 approving review」这条不受绕过影响。
 
 ## 相关文档
 
