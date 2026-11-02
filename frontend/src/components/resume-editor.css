@@ -1,0 +1,375 @@
+.paper-contacts-text,
+.paper-dates-text {
+  font-family: var(--font-paper);
+  color: var(--ink-500);
+}
+
+/* 纸面上的行内编辑：看起来是正文，不是输入框 */
+.paper-input :deep(.el-input__wrapper),
+.paper-input :deep(.el-input__inner) {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.paper-input :deep(.el-input__inner) {
+  font-family: var(--font-paper);
+  font-size: inherit;
+  color: inherit;
+}
+
+.paper-input--name :deep(.el-input__inner) {
+  font-size: 18pt;
+  font-weight: 700;
+}
+
+.paper-input--org :deep(.el-input__inner) {
+  font-weight: 700;
+}
+
+.paper-input--label :deep(.el-input__inner) {
+  color: var(--ink-500);
+}
+
+.paper-date-field :deep(.el-input__wrapper) {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.paper-date-field :deep(.el-input__inner) {
+  font-family: var(--font-paper);
+  font-size: 9.5pt;
+  color: var(--ink-500);
+}
+
+/* 时间选择器默认 220px，两个并排就把公司和职位挤没了 */
+.paper-date-field :deep(.el-date-editor) {
+  width: 88px;
+}
+
+.paper-date-sep {
+  color: var(--ink-500);
+  margin: 0 2px;
+}
+
+.paper-present {
+  margin-left: 4px;
+}
+
+.paper-present :deep(.el-checkbox__label) {
+  font-family: var(--font-paper);
+  font-size: 9.5pt;
+  color: var(--ink-500);
+}
+
+.paper-contact {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* 标签只占短词的宽度，内容吃掉这一行剩下的位置，长邮箱才放得下 */
+.paper-contact .paper-input--label {
+  flex: 0 0 4.5em;
+  width: 4.5em;
+}
+
+.paper-contact .paper-input:not(.paper-input--label) {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.paper-contact .paper-delete {
+  flex: 0 0 auto;
+}
+
+.paper-textarea {
+  width: 100%;
+  padding: 0;
+  font-family: var(--font-paper);
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  field-sizing: content;
+}
+
+.paper-bullet-text {
+  border-radius: 2px;
+}
+
+.resume-editor.is-editable .paper-bullet-text {
+  cursor: text;
+}
+
+/* 键盘焦点要看得见 */
+.resume-editor.is-editable .paper-bullet-text:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.paper-add {
+  display: block;
+  width: 100%;
+  margin: 2mm 0 0;
+  padding: 3px 0;
+  font-family: var(--font-paper);
+  font-size: 10.5pt;
+  text-align: left;
+  color: var(--ink-300);
+  background: transparent;
+  border: none;
+  border-top: 1px dashed var(--ink-150);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.resume-editor:hover .paper-add,
+.resume-editor:focus-within .paper-add {
+  opacity: 1;
+}
+
+.paper-add:hover {
+  color: var(--brand);
+}
+
+/* 条目里的「新增一条要点」缩进到跟要点正文对齐：它是这条经历的下一步 */
+.paper-add--nested {
+  width: calc(100% - 9mm);
+  margin-left: 9mm;
+}
+
+/* 抬头的底边距让给这条按钮，避免它掉进灰底，也避免和下一个分区贴上 */
+.paper-add--after-header {
+  margin-bottom: 7mm;
+}
+
+.paper-action {
+  margin-left: 6px;
+}
+
+.paper-comment {
+  margin-top: 4px;
+}
+
+/* 纸面上的批注：一行细标注，不占地方，也一眼看得出不是简历正文 */
+.comment-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  /* 左边缩进 14px，宽度要跟着减，不然「展开」会挂到版心外面 */
+  width: calc(100% - 14px);
+  margin-left: 14px;
+  padding: 1px 0 1px 10px;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  text-align: left;
+  color: var(--ink-500);
+  background: transparent;
+  border: none;
+  border-left: 2px solid var(--severity-medium);
+  cursor: pointer;
+}
+
+.comment-strip--high {
+  border-left-color: var(--severity-high);
+}
+
+.comment-strip--low {
+  border-left-color: var(--severity-low);
+}
+
+.comment-strip:hover {
+  color: var(--brand);
+}
+
+.comment-strip-count {
+  font-weight: 600;
+  color: var(--ink-700);
+  flex-shrink: 0;
+}
+
+.comment-strip-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comment-strip-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* 展开后每条批注一行：问题和建议，完整的批注卡在右侧批注栏 */
+.comment-inline {
+  margin: 2px 0 2px 14px;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+}
+
+.comment-inline-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.comment-inline-row::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--severity-medium);
+}
+
+.comment-inline-row--high::before {
+  background: var(--severity-high);
+}
+
+.comment-inline-row--low::before {
+  background: var(--severity-low);
+}
+
+.comment-inline-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-700);
+}
+
+.comment-inline-suggestion {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-500);
+}
+
+/* ============================================================
+   编辑态的视觉标记：哪里能改，一眼看得出
+   淡底 = 这一块可以编辑；虚线 = 这个字段可以改
+   全部画在既有元素上，不新增行、不占版面
+   ============================================================ */
+
+/* 抬头里能改的是姓名、定位和联系方式；分区标题本身不铺底色 */
+.resume-editor.is-editable :deep(.paper-header) {
+  margin-bottom: 0;
+}
+
+.resume-editor.is-editable :deep(.paper-header-body) {
+  padding: 4px 10px;
+  margin: 0 -10px;
+  border-radius: var(--radius-sm);
+  background: var(--ink-80);
+  transition: background 0.15s ease;
+}
+
+.resume-editor.is-editable :deep(.paper-item-head) {
+  padding: 3px 8px;
+  margin: 0 -8px;
+  border-radius: var(--radius-sm);
+  background: var(--ink-80);
+  transition: background 0.15s ease;
+}
+
+/* 要点行左边不外扩：那个「·」是绝对定位在行左缘的。删除按钮统一贴在这一行最右 */
+.resume-editor.is-editable :deep(.paper-bullets li) {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding: 2px 8px 2px 4mm;
+  margin: 0 -8px 0.8mm 0;
+  border-radius: var(--radius-sm);
+  background: var(--ink-80);
+  transition: background 0.15s ease;
+}
+
+.resume-editor.is-editable :deep(.paper-bullets .paper-textarea) {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.resume-editor.is-editable :deep(.paper-bullets li > .paper-action) {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.resume-editor.is-editable :deep(.paper-bullets li > .paper-comment) {
+  flex: 1 0 100%;
+}
+
+.resume-editor.is-editable :deep(.paper-item-head:hover),
+.resume-editor.is-editable :deep(.paper-bullets li:hover) {
+  background: var(--brand-soft);
+}
+
+/* 抬头装着姓名、定位与联系方式四行，hover 要细到行：鼠标在哪一行，哪一行才变 */
+.resume-editor.is-editable :deep(.paper-name),
+.resume-editor.is-editable :deep(.paper-headline) {
+  padding: 1px 4px;
+  margin-left: -4px;
+  border-radius: var(--radius-sm);
+}
+
+.resume-editor.is-editable :deep(.paper-name:hover),
+.resume-editor.is-editable :deep(.paper-headline:hover),
+.resume-editor.is-editable :deep(.paper-contact:hover) {
+  background: var(--brand-soft);
+}
+
+/* 可编辑的单行字段：一条极淡的虚线，贴在文字底下而不是贯穿整列 */
+.resume-editor.is-editable :deep(.paper-field--input .el-input__inner),
+.resume-editor.is-editable :deep(.paper-input .el-input__inner),
+.resume-editor.is-editable :deep(.el-date-editor .el-input__inner) {
+  text-decoration: underline dashed var(--ink-150);
+  text-underline-offset: 3px;
+}
+
+.resume-editor.is-editable :deep(.paper-field--input:hover .el-input__inner),
+.resume-editor.is-editable :deep(.paper-input:hover .el-input__inner),
+.resume-editor.is-editable :deep(.el-date-editor:hover .el-input__inner) {
+  text-decoration-color: var(--brand);
+  text-decoration-style: solid;
+}
+
+/* 聚焦：主色环，字段的虚线同时变实线 */
+.resume-editor.is-editable :deep(.paper-field--input:focus-within .el-input__wrapper),
+.resume-editor.is-editable :deep(.paper-input:focus-within .el-input__wrapper),
+.resume-editor.is-editable :deep(.el-date-editor:focus-within .el-input__wrapper) {
+  box-shadow: var(--shadow-focus);
+}
+
+.resume-editor.is-editable :deep(.paper-field--input:focus-within .el-input__inner),
+.resume-editor.is-editable :deep(.paper-input:focus-within .el-input__inner),
+.resume-editor.is-editable :deep(.el-date-editor:focus-within .el-input__inner) {
+  text-decoration-color: var(--brand);
+  text-decoration-style: solid;
+}
+
+/* 正在编辑的要点 */
+.resume-editor.is-editable .paper-textarea:focus {
+  border-radius: 2px;
+  box-shadow: var(--shadow-focus);
+}
+
+/* 纸面外围一圈极淡虚线：一眼知道这张纸现在能改 */
+.resume-editor.is-editable :deep(.resume-paper) {
+  outline: 1px dashed var(--ink-150);
+  outline-offset: -8px;
+}
+

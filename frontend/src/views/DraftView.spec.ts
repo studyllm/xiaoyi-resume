@@ -1,0 +1,225 @@
+// @vitest-environment jsdom
+import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createMemoryHistory, createRouter } from 'vue-router'
+
+import { useDraftStore } from '@/stores/draft'
+import { useSessionStore } from '@/stores/session'
+import { useUiStore } from '@/stores/ui'
+import DraftView from './DraftView.vue'
+
+const RESUME = `工作经历
+美团 前端工程师 2021.03 - 至今
+· 主导活动平台前端架构升级，页面构建时间从 120s 降到 18s
+`
+
+const RESUME_MISSING_TIME = `工作经历
+美团 前端工程师
+· 负责活动平台的前端开发
+`
+
+const RESUME_VAGUE = `工作经历
+美团 前端工程师 2021.03 - 至今
+· 参与团队协作与日常维护
+`
+
+async function mountEditor(resume = RESUME, enterEdit = true) {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  useSessionStore().login('张三')
+  const store = useDraftStore()
+  store.ingest(resume)
+  store.savePending()
+
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', component: { template: '<div />' } },
+      { path: '/draft', component: DraftView },
+      { path: '/diagnosis', component: { template: '<div />' } },
+      { path: '/import', component: { template: '<div />' } },
+    ],
+  })
+  await router.push('/draft')
+  await router.isReady()
+
+  if (enterEdit) useUiStore().requestEditMode('issue-1')
+  const wrapper = mount(DraftView, {
+    attachTo: document.body,
+    global: { plugins: [pinia, router] },
+  })
+  await flushPromises()
+  return { wrapper, store }
+}
+
+type EditorWrapper = Awaited<ReturnType<typeof mountEditor>>['wrapper']
+
+function buttonByText(wrapper: EditorWrapper, text: string) {
+  const found = wrapper.findAll('button').find((button) => button.text().includes(text))
+  if (!found) throw new Error(`找不到按钮：${text}`)
+  return found
+}
+
+/** 跑一次诊断，页面上才有批注可看。 */
+async function mountEditorWithDiagnosis(resume = RESUME) {
+  const { wrapper, store } = await mountEditor(resume)
+  store.diagnose()
+  await flushPromises()
+  return { wrapper, store }
+}
+
+describe('DraftView 编辑模式的键盘流', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('进入编辑模式后纸上的字段可以编辑', async () => {
+    const { wrapper } = await mountEditor()
+    expect(wrapper.find('.paper-field--input').exists()).toBe(true)
+  })
+
+
+  it('Cmd+Enter 保存并退出编辑模式', async () => {
+    const { wrapper, store } = await mountEditor()
+    const input = wrapper.find('.paper-field--input input')
+    await input.setValue('新公司')
+    expect(store.dirty).toBe(true)
+
+    await input.trigger('keydown', { key: 'Enter', metaKey: true })
+    await flushPromises()
+
+    expect(store.dirty).toBe(false)
+    expect(wrapper.find('.paper-field--input').exists()).toBe(false)
+  })
+
+
+
+
+
+
+})
+
+describe('DraftView 纸面上的诊断痕迹', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
+
+  it('页面上没有集中的结构问题清单', async () => {
+    const { wrapper } = await mountEditor(RESUME_MISSING_TIME)
+    expect(wrapper.find('.el-alert').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('这份简历还有结构问题')
+  })
+
+  it('预览模式下纸面不出现结构标注', async () => {
+    const { wrapper } = await mountEditor(RESUME_MISSING_TIME, false)
+    expect(wrapper.findAll('.paper-marker')).toHaveLength(0)
+  })
+
+
+
+  it('批注按简历里的位置排列，不按严重度', async () => {
+    const { wrapper, store } = await mountEditorWithDiagnosis(
+      '工作经历\n甲公司 前端工程师 2021.03 - 2023.01\n· 参与团队协作与日常维护\n乙公司 高级工程师 2023.02 - 至今\n· 负责后端服务开发\n',
+    )
+    const section = store.draft!.sections.find((entry) => entry.kind === 'experience')!
+    store.updateItemMeta(section.id, section.items[1]!.id, { start: null })
+    store.diagnose()
+    await flushPromises()
+
+    // 引擎按严重度排：缺开始时间是「高」，排在最前
+    expect(store.liveIssues[0]!.ruleId).toBe('missing-start')
+    // 界面按简历位置排：它出现在后面，就排在后面
+    const anchors = wrapper.findAll('.comment-sidebar .comment-anchor').map((node) => node.text())
+    const earlier = anchors.findIndex((anchor) => anchor.includes('参与团队协作'))
+    const later = anchors.findIndex((anchor) => anchor.includes('乙公司'))
+    expect(earlier).toBeGreaterThanOrEqual(0)
+    expect(later).toBeGreaterThan(earlier)
+  })
+})
+
+describe('DraftView 编辑器的行为', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+    // jsdom 没有实现 scrollIntoView，定位到某条批注时会调用它
+    Element.prototype.scrollIntoView = () => {}
+  })
+
+
+
+
+
+
+  it('保存后右侧栏顶部列出结构问题', async () => {
+    const { wrapper, store } = await mountEditor(RESUME)
+    const section = store.draft!.sections.find((entry) => entry.kind === 'experience')!
+    store.updateItemMeta(section.id, section.items[0]!.id, { start: null })
+    await flushPromises()
+
+    await buttonByText(wrapper, '保存').trigger('click')
+    await flushPromises()
+
+    const panel = wrapper.find('.structure-panel')
+    expect(panel.exists()).toBe(true)
+    expect(panel.text()).toContain('保存时发现的 1 处问题')
+    expect(panel.text()).toContain('缺少开始时间')
+  })
+
+  it('点清单里的一条会跳到出问题的那个字段', async () => {
+    const { wrapper, store } = await mountEditor(RESUME)
+    const section = store.draft!.sections.find((entry) => entry.kind === 'experience')!
+    store.updateItemMeta(section.id, section.items[0]!.id, { start: null })
+    await flushPromises()
+
+    await buttonByText(wrapper, '保存').trigger('click')
+    await flushPromises()
+    await wrapper.find('.structure-item').trigger('click')
+    await flushPromises()
+
+    const dateInput = wrapper.findAll('.paper-date-field input')[0]!.element
+    expect(document.activeElement).toBe(dateInput)
+  })
+
+  it('没有结构问题时保存后切到预览', async () => {
+    const { wrapper } = await mountEditor(RESUME)
+    await wrapper.find('.paper-field--input input').setValue('新公司')
+
+    await buttonByText(wrapper, '保存').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.paper-field--input').exists()).toBe(false)
+    expect(wrapper.find('.structure-panel').exists()).toBe(false)
+  })
+
+  it('批注可以标记已处理，也可以忽略', async () => {
+    const { wrapper } = await mountEditorWithDiagnosis(RESUME_VAGUE)
+    const card = () => wrapper.find('.comment-sidebar .comment')
+
+    const handle = card().findAll('button').find((button) => button.text().includes('标记已处理'))!
+    await handle.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.comment-sidebar .comment--handled').exists()).toBe(true)
+
+    const before = wrapper.findAll('.comment-sidebar .comment').length
+    const ignore = card().findAll('button').find((button) => button.text().includes('忽略此条'))!
+    await ignore.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.comment-sidebar .comment')).toHaveLength(before - 1)
+  })
+
+  it('批注栏折叠时列出各严重程度的条数', async () => {
+    const { wrapper } = await mountEditorWithDiagnosis(RESUME_VAGUE)
+    useUiStore().setSidebarCollapsed(true)
+    await flushPromises()
+
+    const collapsed = wrapper.find('.sidebar-collapsed')
+    expect(collapsed.exists()).toBe(true)
+    expect(collapsed.text()).toContain('批注')
+
+    const severity = wrapper.findAll('.collapsed-severity')[1]!
+    await severity.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.comment-sidebar').classes()).not.toContain('is-collapsed')
+  })
+})

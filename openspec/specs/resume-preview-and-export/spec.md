@@ -1,0 +1,73 @@
+# resume-preview-and-export Specification
+
+## Purpose
+TBD - created by archiving change add-resume-preview-and-pdf-export. Update Purpose after archive.
+## Requirements
+### Requirement: 导出的 PDF 具备文字层
+
+系统 SHALL 通过浏览器的打印能力导出 PDF。导出物 SHALL 含有可被选取与检索的文字层，SHALL NOT 是整页位图。
+
+导出时 SHALL 隐藏界面自身的元素，包括顶栏、侧边菜单、演示模式标识与操作按钮，SHALL NOT 把任何界面装饰印进 PDF。
+
+#### Scenario: 导出得到带文字层的 PDF
+
+- **WHEN** 用户导出一个版本
+- **THEN** 得到的 PDF 中简历文字可被选取与检索
+- **AND** PDF 中不包含界面自身的元素
+
+#### Scenario: 导出包含简历抬头
+
+- **WHEN** 该版本带有姓名与联系方式
+- **THEN** 导出的 PDF 顶部呈现姓名与联系方式
+
+#### Scenario: 导出提示如何保存
+
+- **WHEN** 用户点击导出 PDF
+- **THEN** 系统调起浏览器打印对话框
+- **AND** 界面提示用户在打印目标中选择「另存为 PDF」
+
+### Requirement: 导出物可直接投递
+
+导出的 PDF SHALL 包含简历抬头（姓名与联系方式）以及该版本的全部内容分区。SHALL NOT 出现底稿中不存在的公司、项目、职责或数字。
+
+#### Scenario: 抬头缺失时给出提示
+
+- **WHEN** 用户导出一个没有姓名与联系方式的版本
+- **THEN** 系统在导出前提示抬头缺失
+- **AND** 用户可以先补全抬头再导出
+
+#### Scenario: 导出内容与版本一致
+
+- **WHEN** 用户导出某个版本
+- **THEN** PDF 中的分区、条目与要点与该版本一致
+- **AND** PDF 中不包含底稿之外的事实
+
+### Requirement: 版本可预览为 A4 简历
+
+系统 SHALL 允许用户把任一版本预览为一张 A4 尺寸的简历版面。预览 SHALL 直接渲染该版本的结构化数据，而非渲染其纯文本正文。
+
+排版 SHALL 限定为单栏的经典简历层级：分区标题加粗并带下划线，条目头呈现「公司名 职位 …… 起止日期」且日期右对齐，要点以悬挂缩进呈现。SHALL NOT 引入双栏、侧边色块、头像或图标。
+
+#### Scenario: 预览一个版本
+
+- **WHEN** 用户在版本详情中打开简历预览
+- **THEN** 界面展示该版本按 A4 比例排版的完整简历
+- **AND** 预览中的分区、条目与要点与该版本的正文一致
+
+#### Scenario: 预览与导出结果一致
+
+- **WHEN** 用户从预览触发导出
+- **THEN** 导出内容的版面与预览一致
+
+#### Scenario: 预览使用结构化数据排版
+
+- **WHEN** 版本中同时存在公司名、职位与起止日期
+- **THEN** 预览中三者排布在同一行且日期右对齐
+- **AND** 该排布无法由纯文本正文还原
+
+#### Scenario: 条目不被分页截断
+
+- **WHEN** 一条要点的位置接近页面底部
+- **THEN** 该要点与其所属条目整体移到下一页
+- **AND** 分区标题不单独留在页面末尾
+

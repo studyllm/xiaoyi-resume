@@ -1,0 +1,352 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { CopyDocument, Download } from '@element-plus/icons-vue'
+
+import ResumePreview from '@/components/ResumePreview.vue'
+import type { DiffEntry, ResumeVersion, SectionKind } from '@/domain/types'
+import { renderMarkdown } from '@/engines/markdown'
+import { useDraftStore } from '@/stores/draft'
+import { useVersionStore } from '@/stores/versions'
+
+const route = useRoute()
+const router = useRouter()
+const versionStore = useVersionStore()
+
+const tab = ref<'preview' | 'body' | 'coverage' | 'diff' | 'uncovered'>('preview')
+
+const tierLabel: Record<string, string> = {
+  strong: '强覆盖',
+  weak: '弱覆盖',
+  none: '未覆盖',
+}
+
+const tierType: Record<string, 'success' | 'warning' | 'info'> = {
+  strong: 'success',
+  weak: 'warning',
+  none: 'info',
+}
+
+const version = computed<ResumeVersion | undefined>(() => versionStore.byId(String(route.params.id)))
+
+/** 版本分区没有稳定 id，用 kind 补一个，供纸面锚点使用。 */
+const paperSections = computed(() =>
+  (version.value?.sections ?? []).map((section) => ({ ...section, id: section.kind })),
+)
+
+const coverage = computed(() => version.value?.coverage ?? [])
+const profile = computed(() => version.value?.profile ?? { name: '', headline: '', contacts: [] })
+
+interface DiffGroup {
+  sectionKind: SectionKind
+  sectionTitle: string
+  itemId: string
+  itemLabel: string
+  entries: DiffEntry[]
+}
+
+const groups = computed<DiffGroup[]>(() => {
+  const map = new Map<string, DiffGroup>()
+  for (const entry of version.value?.diff ?? []) {
+    const key = `${entry.sectionKind}:${entry.itemId}`
+    let group = map.get(key)
+    if (!group) {
+      group = {
+        sectionKind: entry.sectionKind,
+        sectionTitle: entry.sectionTitle,
+        itemId: entry.itemId,
+        itemLabel: entry.itemLabel,
+        entries: [],
+      }
+      map.set(key, group)
+    }
+    group.entries.push(entry)
+  }
+  return [...map.values()]
+})
+
+const integrityText = computed(() => {
+  const integrity = version.value?.integrity
+  if (!integrity) return ''
+  if (integrity.violations.length === 0) {
+    return `本次生成未新增原简历之外的任何事实（${integrity.checked} 条已校验，0 处异常）`
+  }
+  return `本次生成有 ${integrity.violations.length} 处改写没有通过校验，已回退为原文（${integrity.checked} 条已校验）`
+})
+
+async function copyText(text: string, label: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success(`${label}已复制`)
+  } catch {
+    ElMessage.error('复制失败，请手动选择正文')
+  }
+}
+
+function onCopyCommand(command: string): void {
+  if (command === 'markdown') void copyMarkdown()
+  else void copyPlainText()
+}
+
+async function copyPlainText(): Promise<void> {
+  if (!version.value) return
+  await copyText(version.value.body, '纯文本')
+}
+
+async function copyMarkdown(): Promise<void> {
+  if (!version.value) return
+  await copyText(renderMarkdown(version.value), 'Markdown')
+}
+
+function hasProfile(): boolean {
+  const profile = version.value?.profile
+  if (!profile) return false
+  return Boolean(profile.name) && profile.contacts.length > 0
+}
+
+async function exportPdf(): Promise<void> {
+  if (!version.value) return
+  if (useDraftStore().saveIfDirty()) {
+    ElMessage.info('简历有未保存的修改，已先保存再导出')
+  }
+
+  if (!hasProfile()) {
+    try {
+      await ElMessageBox.confirm(
+        '这份简历还没有姓名与联系方式，导出的 PDF 不能直接投递。要先回去补全抬头吗？',
+        '抬头缺失',
+        { type: 'warning', confirmButtonText: '去补全', cancelButtonText: '仍然导出' },
+      )
+      router.push('/draft')
+      return
+    } catch {
+      router.push(`/versions/${version.value.id}/print`)
+      return
+    }
+  }
+
+  router.push(`/versions/${version.value.id}/print`)
+}
+</script>
+
+<template>
+  <div class="page">
+    <el-empty v-if="!version" description="没有找到这个版本">
+      <el-button type="primary" @click="router.push('/versions')">回到版本列表</el-button>
+    </el-empty>
+
+    <template v-else>
+      <div class="page-header">
+        <div class="page-header-text">
+          <h1 class="page-title">{{ version.name }}</h1>
+          <p class="page-subtitle">
+            生成于简历修订号 {{ version.draftRevision }}，对应岗位「{{ version.jdRoleName }}」
+          </p>
+        </div>
+        <div class="page-actions">
+          <el-dropdown trigger="click" @command="onCopyCommand">
+            <el-button text size="small" :icon="CopyDocument">复制</el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="text">纯文本</el-dropdown-item>
+                <el-dropdown-item command="markdown">Markdown</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <el-button type="primary" size="small" :icon="Download" @click="exportPdf">
+            导出 PDF
+          </el-button>
+          <el-button text size="small" @click="router.push('/versions')">返回列表</el-button>
+        </div>
+      </div>
+
+      <el-alert
+        class="card-block"
+        type="info"
+        show-icon
+        :closable="false"
+        title="本版本由本地规则引擎生成，不是真实模型输出"
+      />
+
+      <el-card class="card-block">
+        <template #header>版本说明</template>
+        <p class="description">
+          这一版只对你简历中已有的事实做重组、删减与措辞规范化，未新增任何公司、项目、职责或数字；
+          共 {{ version.uncovered.length }} 项 JD 要求在你的简历中没有对应事实，已在「未覆盖要求」中列出。
+        </p>
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="对应岗位">{{ version.jdRoleName }}</el-descriptions-item>
+          <el-descriptions-item label="生成时的简历修订号">{{ version.draftRevision }}</el-descriptions-item>
+          <el-descriptions-item label="生成时间">{{ version.createdAt }}</el-descriptions-item>
+          <el-descriptions-item label="引擎版本">{{ version.engineVersion }}</el-descriptions-item>
+        </el-descriptions>
+        <el-alert
+          class="integrity-alert"
+          :type="version.integrity.violations.length === 0 ? 'success' : 'warning'"
+          show-icon
+          :closable="false"
+          :title="integrityText"
+        />
+      </el-card>
+
+      <el-tabs v-model="tab">
+        <el-tab-pane label="简历预览" name="preview">
+          <ResumePreview :sections="paperSections" :profile="profile" />
+        </el-tab-pane>
+
+        <el-tab-pane label="正文全文" name="body">
+          <pre class="version-body mono">{{ version.body }}</pre>
+        </el-tab-pane>
+
+        <el-tab-pane :label="`要求覆盖（${coverage.length}）`" name="coverage">
+          <el-table :data="coverage" size="small">
+            <el-table-column label="JD 原句" min-width="300">
+              <template #default="{ row }">{{ row.text }}</template>
+            </el-table-column>
+            <el-table-column label="关键词" width="160">
+              <template #default="{ row }">
+                <span class="text-muted">{{ row.keywords.join('、') || '无关键词' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="覆盖程度" width="190">
+              <template #default="{ row }">
+                <div class="inline-row">
+                  <el-tag :type="tierType[row.tier]" effect="plain">{{ tierLabel[row.tier] }}</el-tag>
+                  <el-tag v-if="row.approximate" type="info" effect="plain">按关键词近似匹配</el-tag>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <el-tab-pane :label="`改动对照（${version.diff.length}）`" name="diff">
+          <el-empty v-if="groups.length === 0" description="没有可对照的改动" />
+
+          <div v-for="group in groups" :key="`${group.sectionKind}:${group.itemId}`" class="diff-group">
+            <h3 class="diff-group-title">
+              {{ group.sectionTitle }} · {{ group.itemLabel || '未命名条目' }}
+            </h3>
+
+            <el-card v-for="entry in group.entries" :key="entry.bulletId" class="diff-card">
+              <div class="inline-row diff-tags">
+                <el-tag v-if="entry.change === 'keep'" type="success" effect="plain">保留</el-tag>
+                <el-tag v-else-if="entry.change === 'rewrite'" type="warning" effect="plain">改写</el-tag>
+                <el-tag v-else type="danger" effect="plain">已移除</el-tag>
+                <el-tag v-if="entry.placement === 'to-end'" type="info" effect="plain">移至末尾</el-tag>
+                <span class="text-muted">{{ entry.reason }}</span>
+              </div>
+
+              <el-row :gutter="12" class="diff-columns">
+                <el-col :span="12">
+                  <div class="diff-column-label">简历原文</div>
+                  <div class="diff-text diff-text--from">{{ entry.fromText }}</div>
+                </el-col>
+                <el-col :span="12">
+                  <div class="diff-column-label">版本文本</div>
+                  <div v-if="entry.toText" class="diff-text diff-text--to">{{ entry.toText }}</div>
+                  <div v-else class="diff-text diff-text--removed">
+                    未进入这一版，简历里仍然保留
+                  </div>
+                </el-col>
+              </el-row>
+            </el-card>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane :label="`未覆盖要求（${version.uncovered.length}）`" name="uncovered">
+          <el-empty
+            v-if="version.uncovered.length === 0"
+            description="这份 JD 的要求在你的简历中都能找到对应事实"
+          />
+          <el-table v-else :data="version.uncovered" size="small">
+            <el-table-column label="JD 原句" min-width="320">
+              <template #default="{ row }">{{ row.text }}</template>
+            </el-table-column>
+            <el-table-column label="关键词" width="160">
+              <template #default="{ row }">
+                <span class="text-muted">{{ row.keywords.join('、') || '无关键词' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="说明" min-width="240">
+              <template #default="{ row }">
+                <div class="inline-row">
+                  <el-tag :type="row.reason === 'planned-only' ? 'warning' : 'info'" effect="plain">
+                    {{ row.reason === 'planned-only' ? '只有规划性表述' : '你的简历中没有对应事实' }}
+                  </el-tag>
+                </div>
+                <div class="text-muted">{{ row.explanation }}</div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
+    </template>
+  </div>
+</template>
+
+<style scoped>
+.description {
+  margin: 0 0 12px;
+}
+
+.integrity-alert {
+  margin-top: 12px;
+}
+
+.version-body {
+  margin: 0;
+  padding: 16px;
+  background: var(--paper);
+  border: 1px solid var(--xiaoyi-border);
+  border-radius: 6px;
+  line-height: 1.9;
+}
+
+.diff-group {
+  margin-bottom: 20px;
+}
+
+.diff-group-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+
+.diff-card {
+  margin-bottom: 10px;
+}
+
+.diff-tags {
+  margin-bottom: 10px;
+}
+
+.diff-columns {
+  margin-top: 4px;
+}
+
+.diff-column-label {
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--xiaoyi-muted);
+}
+
+.diff-text {
+  padding: 8px 10px;
+  border-radius: 4px;
+  line-height: 1.7;
+}
+
+.diff-text--from {
+  background: var(--ink-80);
+  color: var(--ink-700);
+}
+
+.diff-text--to {
+  background: var(--ok-soft);
+  color: var(--ok-ink);
+}
+
+.diff-text--removed {
+  background: var(--severity-high-soft);
+  color: var(--severity-high-ink);
+}
+</style>

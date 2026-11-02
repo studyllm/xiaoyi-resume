@@ -1,0 +1,147 @@
+@import './tokens.css';
+
+:root {
+  --xiaoyi-bg: var(--desk);
+  --xiaoyi-text: var(--ink-900);
+  --xiaoyi-muted: var(--ink-500);
+  --xiaoyi-border: var(--ink-150);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--desk);
+  color: var(--ink-900);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-lg) 48px;
+}
+
+/* 简历页、诊断页和下面两个表单页使用同一套顶距与左右距 */
+.draft-main,
+.diagnosis-main {
+  box-sizing: border-box;
+  padding: var(--space-xl) var(--space-lg) 48px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+.page-header-text {
+  min-width: 0;
+}
+
+/* 纸面页的页头与纸同宽，并在内容区里居中 */
+.page-header--paper {
+  max-width: var(--paper-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* 诊断栏挤占宽度时，不要再给纸面两侧留白，否则标题会比简历宽一圈 */
+.diagnosis-main .resume-preview.resume-preview {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* 诊断栏挤占宽度时，不要再给纸面两侧留白，否则标题会比简历宽一圈 */
+.diagnosis-main .resume-preview.resume-preview {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.page-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.page-title {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.page-subtitle {
+  margin: 0;
+  color: var(--ink-500);
+}
+
+.card-block {
+  margin-bottom: var(--space-lg);
+}
+
+/* 删除入口统一是垃圾桶图标：淡色常显，悬停才变警示色 */
+.paper-delete.el-button.is-text {
+  color: var(--ink-300);
+}
+
+.paper-delete.el-button.is-text:hover {
+  color: var(--severity-high);
+}
+
+/* 文字按钮：常态是主色字，悬停加一层淡青底——跟正文分得开，也看得出能点。
+   改的是 Element Plus 的变量而不是 color，各状态原有的规则照旧生效：
+   禁用、纸面删除入口、破坏性确认都不受这条影响。
+   用 html 提高特异性，让覆盖结果与样式加载顺序无关——
+   组件库按需引入时 CSS 先后不可控。 */
+html .el-button.is-text:not(.el-button--danger):not(.paper-delete) {
+  --el-button-text-color: var(--brand);
+}
+
+html .el-button.is-text:not(.is-disabled):not(.el-button--danger):not(.paper-delete):hover {
+  background-color: var(--brand-soft);
+}
+
+/* 纸放在桌面上：编辑页与导入页共用 */
+.paper-canvas {
+  background: var(--desk);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.text-muted {
+  color: var(--ink-500);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.inline-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.mono {
+  font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

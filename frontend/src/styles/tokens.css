@@ -1,0 +1,125 @@
+/* ============================================================
+   小奕·简历 · 设计变量
+   唯一允许写死视觉字面量的文件。其余样式一律引用这里的变量。
+   ============================================================ */
+
+:root {
+  /* ---- 墨色梯度：文字与分隔线 ---- */
+  --ink-900: #16181d;
+  --ink-700: #3d434d;
+  --ink-500: #767c87;
+  --ink-300: #c9ccd2;
+  --ink-150: #e6e8ec;
+  --ink-80: #f1f2f4;
+
+  /* ---- 纸与桌面 ---- */
+  --paper: #ffffff;
+  --desk: #f2f3f5;
+
+  /* ---- 主色：松墨青。用于可操作的元素 ---- */
+  --brand: #0f766e;
+  --brand-strong: #0c5e58;
+  --brand-soft: #e7f1f0;
+
+  /* ---- 语义色：只用于表达含义。与主色不同色相 ---- */
+  --severity-high: #dc2626;
+  --severity-high-soft: #fee2e2;
+  --severity-high-ink: #b91c1c;
+  --severity-medium: #d97706;
+  --severity-medium-soft: #fef3c7;
+  --severity-medium-ink: #b45309;
+  --severity-low: #64748b;
+  --severity-low-soft: #eef2f7;
+  --severity-low-ink: #475569;
+  --ok: #16a34a;
+  --ok-soft: #eaf7ee;
+  --ok-ink: #3f6212;
+
+  /* ---- 字体 ---- */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  --font-paper: 'Songti SC', SimSun, 'Source Han Serif SC', 'Noto Serif CJK SC', serif;
+
+  /* ---- 字号 ---- */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+
+  /* ---- 间距节奏 ---- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  /* ---- 纸面尺寸 ---- */
+  --paper-width: 210mm;
+  /* 落地页样例区里的简历片段：不是整页 A4，宽度由内容可读性决定 */
+  --paper-fragment-width: 420px;
+
+  /* ---- 落地页 ---- */
+  --landing-width: 1280px;
+  /* 首屏右侧样例区的宽度：纸片段 + 批注栏 */
+  --landing-showcase-width: 700px;
+
+  /* ---- 品牌标识 ---- */
+  --brand-logo-size-landing: 28px;
+  --brand-logo-size-bar: 24px;
+
+  /* ---- 圆角 ---- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-paper: 2px;
+
+  /* ---- 阴影 ---- */
+  --shadow-card: 0 1px 2px rgba(22, 24, 29, 0.06);
+  --shadow-raised: 0 2px 12px rgba(22, 24, 29, 0.08);
+  --shadow-paper: 0 2px 16px rgba(22, 24, 29, 0.12);
+  --shadow-focus: 0 0 0 2px rgba(15, 118, 110, 0.16);
+}
+
+/* ============================================================
+   覆盖 Element Plus 主题。
+   用 html:root 而不是 :root —— 组件库的 base.css 也是 :root 定义同一批
+   变量，同特异性下由加载顺序决定谁赢；html:root 特异性更高，
+   覆盖结果与样式加载顺序无关（按需引入组件库时顺序不可控）。
+   ============================================================ */
+
+html:root {
+  --el-color-primary: #0f766e;
+  --el-color-primary-rgb: 15, 118, 110;
+  --el-color-primary-light-3: #579f99;
+  --el-color-primary-light-5: #87b1ac;
+  --el-color-primary-light-7: #b7d6d3;
+  --el-color-primary-light-8: #cfe3e2;
+  --el-color-primary-light-9: #e7f1f0;
+  --el-color-primary-dark-2: #0c5e58;
+
+  --el-color-success: #16a34a;
+  --el-color-warning: #d97706;
+  --el-color-danger: #dc2626;
+  --el-color-error: #dc2626;
+  --el-color-info: #64748b;
+
+  --el-text-color-primary: #16181d;
+  --el-text-color-regular: #3d434d;
+  --el-text-color-secondary: #767c87;
+  --el-text-color-placeholder: #767c87;
+  --el-border-color: #e6e8ec;
+  --el-border-color-light: #eef0f2;
+  --el-border-color-lighter: #f1f2f4;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-light: #f7f8f9;
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f2f3f5;
+
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 4px;
+  --el-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+}
