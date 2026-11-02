@@ -108,14 +108,43 @@ npx vitest run --no-file-parallelism
 | 合并前必须 | CI 门禁全绿（`verify` 作业） |
 | 直接推主干 | 仅限紧急修复，且事后补 PR 记录 |
 
-主干保护需要在仓库设置里开启，对应检查项：
+主干保护需要在仓库设置里开启，**这一步需要仓库 admin 权限**（所有者本人，或被授予 admin 的协作者）。有 write 权限的协作者做不了——GitHub 会返回 404。
 
-1. Settings → Branches → Add rule：`main`
-   - Require a pull request before merging（勾选）
-   - Require status checks to pass（勾选，选 `verify` 作业）
-   - Require branches to be up to date before merging（勾选）
-   - Do not allow bypassing the above settings（勾选）
-2. Settings → General → Pull Requests → Allow merge commits 关闭，只留 **Squash merging**
+### 方式一：Rulesets（推荐）
+
+Rules → Rulesets → New ruleset → New branch ruleset：
+
+| 项 | 值 |
+| --- | --- |
+| Ruleset Name | `main 分支保护` |
+| Enforcement | Active |
+| Target branches | `main`（或 Include → `refs/heads/main`） |
+
+Rules 部分勾选：
+
+- Require a pull request before merging（required_approving_review_count = 1）
+- Require status checks to pass → 添加 `verify`
+- Require linear history
+- Block force pushes
+- Block branch deletions
+
+### 方式二：经典分支保护
+
+Settings → Branches → Add rule → `main`：
+
+- Require a pull request before merging（勾选）
+- Require status checks to pass（勾选，选 `verify` 作业）
+- Require branches to be up to date before merging（勾选）
+- Do not allow bypassing the above settings（勾选）
+
+再把 Settings → General → Pull Requests → Allow merge commits 关闭，只留 **Squash merging**。
+
+### 验证保护是否生效
+
+```bash
+# 直接推主干应当被拒
+git push origin main
+```
 
 ## 相关文档
 
