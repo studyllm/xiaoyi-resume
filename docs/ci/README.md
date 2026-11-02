@@ -95,6 +95,20 @@ npx vitest run --no-file-parallelism
 
 以 Gitee Go 为例，等价做法是新建流水线、同样配这四步，其中第 4 步是自定义命令 `cd frontend && npm run verify`。
 
+## 仓库设置清单
+
+以下几项在 GitHub 网页设置里完成，**都需要仓库 admin 权限**（write 级协作者调用 API 会得到 404）。做完一遍就不用再来了。
+
+| 项 | 位置 | 值 |
+| --- | --- | --- |
+| 仓库标签 | 仓库首页右侧 About → 齿轮图标 → Topics | `vue` `vue3` `typescript` `vite` `pinia` `element-plus` `vitest` `resume` `resume-builder` `openspec` |
+| 仓库描述 | 同上 | 一句话说清它是什么，例如「一份简历，按 JD 生成多个互不影响的版本」 |
+| 主干保护 | 见上一节 | `main` 受保护，只能经 PR 合入 |
+| 合并方式 | Settings → General → Pull Requests | 只留 Squash merging，关掉 merge commits 与 rebase |
+| 可选：关掉用不上的功能 | Settings → General → Features | Wiki、Projects、Issues 按需关 |
+
+标签在 About 区域里逐个输入并按回车添加，最后点 Save topics 才会生效。
+
 ## 分支与 PR 流程
 
 `main` 是主干，**受保护，只能通过 PR 合入**。
