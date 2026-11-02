@@ -95,7 +95,29 @@ npx vitest run --no-file-parallelism
 
 以 Gitee Go 为例，等价做法是新建流水线、同样配这四步，其中第 4 步是自定义命令 `cd frontend && npm run verify`。
 
+## 分支与 PR 流程
+
+`main` 是主干，**受保护，只能通过 PR 合入**。
+
+| 项 | 约定 |
+| --- | --- |
+| 分支命名 | `feat/` `fix/` `docs/` `chore/` + kebab-case 短述，如 `feat/pdf-intake` |
+| 一个 PR 只做一件事 | 规格、实现、文档分开提，避免评审时看不清边界 |
+| PR 必须写清 | 改什么、为什么、怎么验的。对应任务清单里勾掉哪几条 |
+| 合并方式 | squash merge——主干历史保持线性，一个变更一条记录 |
+| 合并前必须 | CI 门禁全绿（`verify` 作业） |
+| 直接推主干 | 仅限紧急修复，且事后补 PR 记录 |
+
+主干保护需要在仓库设置里开启，对应检查项：
+
+1. Settings → Branches → Add rule：`main`
+   - Require a pull request before merging（勾选）
+   - Require status checks to pass（勾选，选 `verify` 作业）
+   - Require branches to be up to date before merging（勾选）
+   - Do not allow bypassing the above settings（勾选）
+2. Settings → General → Pull Requests → Allow merge commits 关闭，只留 **Squash merging**
+
 ## 相关文档
 
 - 引擎模式开关的口径：`docs/adr/0001-engine-mode-switch.md`
-- 本变更的设计与取舍：`openspec/changes/establish-test-and-ci-baseline/design.md`
+- 本变更的设计与取舍：`openspec/changes/archive/2026-11-02-establish-test-and-ci-baseline/design.md`
