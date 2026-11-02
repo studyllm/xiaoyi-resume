@@ -1,7 +1,7 @@
 # account-access Specification
 
 ## Purpose
-TBD - created by archiving change add-resume-frontend-prototype. Update Purpose after archive.
+让简历与版本归属于一个具体的人，而不是躺在某台机器的浏览器里。原型阶段的身份就是「一个名字」——没有密码、没有服务端、不跨设备；未登录仍可粘贴与解析，只有保存时才问身份。真正的账号体系（邮箱验证、多设备、找回）不在本版范围。
 ## Requirements
 ### Requirement: 登录以获得保存能力
 

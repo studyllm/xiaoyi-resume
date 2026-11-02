@@ -1,7 +1,7 @@
 # product-identity Specification
 
 ## Purpose
-TBD - created by archiving change add-product-logo. Update Purpose after archive.
+让产品在界面各处有一致的身份标识。顶栏固定使用标识的图形部分，不带产品名字样，资源位置固定以便统一替换。边界：只管标识本身，不涉及品牌色与排版——那属于视觉语言。
 ## Requirements
 ### Requirement: 顶栏有品牌标识
 

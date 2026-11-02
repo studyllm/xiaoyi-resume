@@ -1,7 +1,7 @@
 # product-visual-language Specification
 
 ## Purpose
-TBD - created by archiving change establish-product-visual-language. Update Purpose after archive.
+统一整个产品的视觉表达，让「这是一份专业的简历工具」在每个页面都成立。规定颜色只承担语义、字体分层、纸是内容的承载形式、按钮按语义分三层。边界：只约束语义与层级，不规定具体版式细节——版式由纸面相关的能力域负责。
 ## Requirements
 ### Requirement: 界面样式只使用设计变量
 

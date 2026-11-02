@@ -1,7 +1,7 @@
 # resume-terminology Specification
 
 ## Purpose
-TBD - created by archiving change rename-resume-terminology. Update Purpose after archive.
+统一界面用词与内部概念的对应关系。内部用「底稿」「版本」保持定义精确，界面上分别显示为「我的简历」「多 JD 版本」，界面文案不得出现内部术语。边界：只管术语对应，不管整体文案的语气与句式。
 ## Requirements
 ### Requirement: 界面用词与内部概念的对应关系
 

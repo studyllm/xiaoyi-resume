@@ -1,7 +1,7 @@
 # draft-diagnosis Specification
 
 ## Purpose
-TBD - created by archiving change add-resume-frontend-prototype. Update Purpose after archive.
+让用户在投出简历之前，先看清这份稿本身的问题。诊断只评价底稿、不读 JD，结论必须落到具体句子并说明问题是什么，只覆盖三类焦点问题，不给总分也不自动改写。边界：不做逐条润色建议，不判断简历好不好，诊断全程不涉及任何题目类内容。
 ## Requirements
 ### Requirement: 诊断只评价底稿本身
 

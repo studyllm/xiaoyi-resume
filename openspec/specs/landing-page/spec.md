@@ -1,7 +1,7 @@
 # landing-page Specification
 
 ## Purpose
-TBD - created by archiving change landing-page-rework. Update Purpose after archive.
+让第一次来的人在几秒内看懂这个产品能做什么、并且愿意试。首屏用放大的简历片段配样例批注，说明「一份事实底稿、按 JD 派生多版」这件事。边界：只承载展示与入口，不承载任何功能。
 ## Requirements
 ### Requirement: 落地页首屏共用一个横向框架
 

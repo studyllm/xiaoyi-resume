@@ -1,7 +1,7 @@
 # jd-version-generation Specification
 
 ## Purpose
-TBD - created by archiving change add-resume-frontend-prototype. Update Purpose after archive.
+把一份底稿按某份 JD 派生成一份可投递的定向简历，同时守住「不编造」这条底线。核心约束是只重组、删减、强调底稿中已有的事实；材料不足以支撑的 JD 要求如实列为未覆盖，而不是补一个像样的说法。边界：由本地规则引擎（关键词目录、措辞变换、不变量校验）实现，不是模型改写。
 ## Requirements
 ### Requirement: 依据粘贴的 JD 生成新版本
 

@@ -1,7 +1,7 @@
 # prototype-runtime Specification
 
 ## Purpose
-TBD - created by archiving change add-resume-frontend-prototype. Update Purpose after archive.
+规定原型作为一个可独立运行的本地应用的运行约束：不依赖后端、引擎可替换、数据存本地、明确标识演示模式。目的是让评审不会把原型误认为真实产品。边界：这些约束会在服务端化阶段被逐条退役。
 ## Requirements
 ### Requirement: 原型不依赖后端
 

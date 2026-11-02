@@ -1,7 +1,7 @@
 # resume-draft Specification
 
 ## Purpose
-TBD - created by archiving change add-resume-frontend-prototype. Update Purpose after archive.
+规定用户那份唯一事实源怎么进来、怎么存、怎么改。粘贴文本是保证能用的路径，解析结果直接以可编辑结构保存，用户能在纸面上直接改正文。边界：上传文件在原型阶段是占位；一个用户同时只有一份底稿，再次放入即覆盖。
 ## Requirements
 ### Requirement: 通过粘贴文本放入底稿
 

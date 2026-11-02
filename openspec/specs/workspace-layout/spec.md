@@ -1,7 +1,7 @@
 # workspace-layout Specification
 
 ## Purpose
-TBD - created by archiving change fix-workspace-layout. Update Purpose after archive.
+规定工作台的滚动与横向对齐规则。内容区是唯一滚动容器，侧栏独立滚动；页头与下方内容共用同一个横向框架，承载纸面的页面页头与纸同宽居中。边界：落地页不属于工作台布局，可整页滚动。
 ## Requirements
 ### Requirement: 工作台的滚动只发生在内容区
 

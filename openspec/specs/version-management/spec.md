@@ -1,7 +1,7 @@
 # version-management Specification
 
 ## Purpose
-TBD - created by archiving change add-resume-frontend-prototype. Update Purpose after archive.
+管理按 JD 生成的多个快照。版本是生成当刻的独立快照，底稿后续修改不回写；列表展示底稿入口与全部版本，可打开对照、复制正文、删除。边界：同一份 JD 可重复生成并存多份，不做版本合并。
 ## Requirements
 ### Requirement: 版本列表展示底稿入口与全部版本
 

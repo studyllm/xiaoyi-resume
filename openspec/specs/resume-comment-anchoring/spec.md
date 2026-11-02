@@ -1,7 +1,7 @@
 # resume-comment-anchoring Specification
 
 ## Purpose
-TBD - created by archiving change improve-diagnosis-as-inline-comments. Update Purpose after archive.
+让诊断意见与简历的具体位置建立可见的双向关联——点批注高亮原文，点原文高亮批注。编辑时行内批注与句子同屏，批注按简历中出现的先后顺序排列而不是按严重度。边界：锚定只到分区标题、条目标题、要点片段三级，不做字符级高亮。
 ## Requirements
 ### Requirement: 意见锚在简历的对应位置
 

@@ -30,6 +30,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.spec.ts'],
+    // 单个用例实测最长约 2.2s，30s 是 13 倍余量。默认 5s 在机器负载升高时
+    // 会把排队造成的等待误判成失败，让「全绿」失去证据意义。
+    testTimeout: 30000,
+    hookTimeout: 30000,
     server: {
       deps: {
         // 组件单测会渲染 Element Plus 组件，需要让 Vite 处理它的样式导入

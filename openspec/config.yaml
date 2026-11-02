@@ -1,20 +1,26 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  项目：小奕·简历。面向求职者的简历工具。用户维护一份简历底稿（界面显示「我的简历」），
+  按不同 JD 生成多个互不影响的版本快照（界面显示「多 JD 版本」），导出 A4 PDF / Markdown / 纯文本投递。
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  纯前端原型：Vue 3.5 + TypeScript 5.7 + Pinia + Vite 6 + Element Plus 2.9 + Vitest 2。
+  解析、诊断、JD 解析与版本生成全部由浏览器内的本地规则引擎完成，不依赖后端与网络。
+
+  开发规范见仓库根目录的 CLAUDE.md——那是唯一的规范来源，本文件不重复其中的内容。
+
+  术语约定：文档内部用「底稿」「版本」保持定义精确；界面文案不得出现「底稿」，
+  一律显示为「我的简历」「多 JD 版本」。
+
+rules:
+  specs:
+    - 界面文案不得出现内部术语「底稿」，界面上显示为「我的简历」；「版本」在导航与页面标题中显示为「多 JD 版本」。
+    - 需求要写成可验证的行为，场景用 WHEN/THEN 描述用户能观察到的结果，不描述实现方式。
+    - 新建能力域时，除 delta spec 外还要给出该能力域的 `## Purpose`：它解决什么问题、当前边界在哪。归档工具不会搬运 Purpose，必须在归档后手工回填到 `openspec/specs/<能力域>/spec.md`。
+    - 引擎产出的用户可见文案不得出现禁用词（面试、笔试、八股、考点、题库、题目、刷题、真题、面经）。
+
+  tasks:
+    - 若本次变更新建了能力域，任务清单必须包含一项：归档后回填 `openspec/specs/<能力域>/spec.md` 的 `## Purpose`，不得保留占位符。归档工具生成的骨架里这个段是硬编码的占位符，只能手工填。
+    - 每条任务都要能对应一个可验证的行为，完成后能说清「怎么算做完了」。
+    - 验收条件要区分两类：能靠测试断言的写「自动化验收」，只能靠浏览器看效果的写「浏览器验收」。不要在测试里断言 CSS 字符串存在。
+    - 改动涉及界面时，任务清单要包含在浏览器里实际走一遍黄金路径的步骤。

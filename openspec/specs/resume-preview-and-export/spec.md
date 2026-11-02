@@ -1,7 +1,7 @@
 # resume-preview-and-export Specification
 
 ## Purpose
-TBD - created by archiving change add-resume-preview-and-pdf-export. Update Purpose after archive.
+让版本能被真的投出去——预览即导出，导出物必须带文字层，纯文本、Markdown、PDF 三种格式内容一致。边界：通过浏览器打印能力导出，不还原原文件版式，也不做精美排版与模板市场。
 ## Requirements
 ### Requirement: 导出的 PDF 具备文字层
 
