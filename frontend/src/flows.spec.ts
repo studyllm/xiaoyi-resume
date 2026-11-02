@@ -375,6 +375,15 @@ describe('完整流程回归', () => {
     }
   })
 
+  it('上传入口是真实实现，不是占位', () => {
+    const template = readFileSync(join(process.cwd(), 'src/views/ImportView.vue'), 'utf-8')
+    expect(template).not.toContain('暂不支持 PDF 解析')
+    expect(template).not.toContain('仅作占位展示')
+    expect(template).not.toContain('不产生任何简历内容')
+    // 真的去读文件，而不是只渲染一个拖拽框
+    expect(template).toContain('extractPdfText')
+  })
+
   it('生成的版本没有出现底稿之外的数字', () => {
     seedDraft()
     const draftStore = useDraftStore()

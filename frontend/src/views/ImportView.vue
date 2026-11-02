@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { UploadFilled } from '@element-plus/icons-vue'
 
@@ -10,6 +10,7 @@ import { useUiStore } from '@/stores/ui'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
 import { LOW_CONFIDENCE_THRESHOLD } from '@/engines/parseDraft'
+import { extractPdfText } from '@/engines/pdfText'
 import { findStructureFindings, type StructureFinding } from '@/engines/structure'
 import type { Draft } from '@/domain/types'
 
@@ -21,11 +22,14 @@ const session = useSessionStore()
 const tab = ref<'paste' | 'upload'>('paste')
 const rawText = ref('')
 const parsing = ref(false)
+const extracting = ref(false)
 const confidence = ref<number | null>(null)
 const warnings = ref<string[]>([])
 const failure = ref<string | null>(null)
 /** 解析当时查出的结构问题。用户在纸上改的时候它不动，保存时重算。 */
 const structureIssues = ref<StructureFinding[]>([])
+/** 粘贴输入框。PDF 没有文字层时要把焦点交回去。 */
+const pasteInput = ref<{ focus: () => void } | null>(null)
 
 const lowConfidence = computed(
   () => confidence.value !== null && confidence.value < LOW_CONFIDENCE_THRESHOLD,
@@ -37,12 +41,13 @@ function anchorOf(finding: StructureFinding): string {
   return finding.sectionTitle
 }
 
-function parse(): void {
+/** 返回解析是否成功——上传路径要靠它决定要不要把用户带回粘贴页签。 */
+function parse(extraWarnings: string[] = []): boolean {
   failure.value = null
   if (!rawText.value.trim()) {
     failure.value = '需要简历正文才能解析'
     ElMessage.warning(failure.value)
-    return
+    return false
   }
 
   parsing.value = true
@@ -51,20 +56,64 @@ function parse(): void {
 
   if (!result.ok) {
     confidence.value = null
-    warnings.value = []
+    // 额外的警告要留着——上传来的文字可能很少，用户更需要知道这一点
+    warnings.value = [...extraWarnings]
     structureIssues.value = []
     failure.value = result.failure?.message ?? '解析失败'
     ElMessage.error(failure.value)
-    return
+    return false
   }
 
   confidence.value = result.confidence
-  warnings.value = result.warnings
+  warnings.value = [...extraWarnings, ...result.warnings]
   // 与编辑页同一口径：只列缺字段、时间对不上这类要紧的。
   // 「某个分区是空的」由解析器自己的警告说明。
   structureIssues.value = findStructureFindings(draftStore.pending!).filter(
     (finding) => finding.severity !== 'low',
   )
+  return true
+}
+
+/**
+ * 上传 PDF。提取出的文字走与粘贴同一个入口，不新写一条解析路径。
+ */
+async function onFileSelected(uploadFile: { raw?: File }): Promise<void> {
+  const raw = uploadFile.raw
+  if (!raw || extracting.value) return
+
+  extracting.value = true
+  failure.value = null
+  try {
+    const result = await extractPdfText(raw)
+
+    if (!result.ok) {
+      failure.value = result.failure?.message ?? '这份 PDF 读不出来'
+      ElMessage.error(failure.value)
+      return
+    }
+
+    if (result.quality === 'none') {
+      failure.value =
+        '这份 PDF 没有可读取的文字层，可能是扫描件或图片页。请改用「粘贴文本」，把内容贴进来。'
+      tab.value = 'paste'
+      await nextTick()
+      pasteInput.value?.focus()
+      ElMessage.warning(failure.value)
+      return
+    }
+
+    // 提取出的文字先进输入框：用户能看到读到了什么，也能自己补
+    rawText.value = result.text
+    const parsed = parse(result.warnings)
+    if (!parsed && result.quality === 'sparse') {
+      // 结构认不出来，但读到的文字已经交到用户手上了——带回粘贴页签让他改
+      tab.value = 'paste'
+      await nextTick()
+      pasteInput.value?.focus()
+    }
+  } finally {
+    extracting.value = false
+  }
 }
 
 /** 纸上改了内容。 */
@@ -145,30 +194,43 @@ function loadDemo(): void {
     <el-tabs v-model="tab" class="card-block">
       <el-tab-pane label="粘贴文本" name="paste">
         <el-input
+          ref="pasteInput"
           v-model="rawText"
           type="textarea"
           :rows="14"
           placeholder="把简历正文粘贴到这里，包含「教育背景 / 工作经历 / 项目经历 / 专业技能」这样的分区标题会更好解析"
         />
         <div class="inline-row import-actions">
-          <el-button type="primary" size="small" :loading="parsing" @click="parse">解析</el-button>
+          <el-button type="primary" size="small" :loading="parsing" @click="parse()">解析</el-button>
           <el-button text size="small" @click="loadDemo">载入演示数据</el-button>
         </div>
       </el-tab-pane>
 
       <el-tab-pane label="上传文件" name="upload">
         <el-alert
+          v-if="extracting"
+          class="card-block"
           type="info"
           show-icon
           :closable="false"
-          title="原型阶段暂不支持 PDF 解析"
-          description="上传入口只是占位：系统不会读取文件内容，也不会生成任何简历内容。请改用「粘贴文本」页签。"
+          title="正在读取 PDF 的文字"
+          description="文件在浏览器里解析，不会上传到任何服务器。"
         />
-        <el-upload class="upload-placeholder" drag action="#" :auto-upload="false" :show-file-list="false">
+        <el-upload
+          class="upload-drop"
+          drag
+          accept="application/pdf,.pdf"
+          :auto-upload="false"
+          :show-file-list="false"
+          :disabled="extracting"
+          :on-change="onFileSelected"
+        >
           <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-          <div class="el-upload__text">把文件拖到此处，或<em>点击选择</em></div>
+          <div class="el-upload__text">把 PDF 拖到此处，或<em>点击选择</em></div>
           <template #tip>
-            <div class="el-upload__tip">仅作占位展示，请改用粘贴文本</div>
+            <div class="el-upload__tip">
+              只支持 PDF，文件在浏览器里解析。读不出文字时会把你能读到的部分交给你改。
+            </div>
           </template>
         </el-upload>
       </el-tab-pane>
@@ -254,7 +316,7 @@ function loadDemo(): void {
   margin-top: 12px;
 }
 
-.upload-placeholder {
+.upload-drop {
   margin-top: 16px;
 }
 
