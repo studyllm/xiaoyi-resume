@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
+import { findForbiddenWords } from '@/engines/forbidden'
+
 // 本文件在 frontend/src/ 下，仓库根在其上两层
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -113,5 +115,19 @@ describe('生效规格', () => {
       if (!/^#### Scenario: /m.test(text)) problems.push(`${name}：没有场景条目`)
     }
     expect(problems).toEqual([])
+  })
+})
+
+describe('对外说明', () => {
+  // README 是仓库的公开落地页，是产品最对外的一层，不能出现被排除方向的内容。
+  // docs/ 下的内部文档不在此列——它们本来就要写清楚「哪些方向不做」。
+  it('README 不出现禁用词', () => {
+    const readme = readFileSync(join(repoRoot, 'README.md'), 'utf-8')
+    expect(findForbiddenWords(readme)).toEqual([])
+  })
+
+  it('README 用的是界面用词，不是内部术语', () => {
+    const readme = readFileSync(join(repoRoot, 'README.md'), 'utf-8')
+    expect(readme).not.toContain('底稿')
   })
 })
