@@ -104,6 +104,7 @@ function buttonByText(wrapper: ReturnType<typeof mountEditor>, text: string) {
  */
 function editorStyles(): string {
   const files = [
+    'src/styles/tokens.css',
     'src/components/resume-editor.css',
     'src/components/ContactList.vue',
     'src/components/ItemDates.vue',
@@ -512,9 +513,10 @@ describe('ResumeEditor', () => {
 
   it('lines the nested add button up with the bullet text', () => {
     const source = editorStyles()
-    // 9mm = 要点的缩进（ul 5mm + li 4mm）
+    // 9mm = 要点的缩进（列表 5mm + 条目 4mm）
     expect(source).toContain('width: calc(100% - 9mm)')
-    expect(source).toContain('margin-left: 9mm')
+    expect(source).toContain('margin-left: var(--paper-space-indent)')
+    expect(source).toContain('--paper-space-indent: 9mm')
   })
 
   it('lets a contact value use the rest of the line', () => {

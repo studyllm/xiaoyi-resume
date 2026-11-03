@@ -227,7 +227,7 @@ function severityClass(severity?: string): string {
 .resume-preview {
   display: flex;
   justify-content: center;
-  padding: 24px 16px 48px;
+  padding: var(--space-xl) var(--space-lg) var(--space-3xl);
 }
 
 /* 片段：落地页样例区里的一段简历。不是整页 A4，没有最小高度，边距也收紧 */
@@ -246,68 +246,68 @@ function severityClass(severity?: string): string {
 .resume-paper {
   width: var(--paper-width);
   min-height: 297mm;
-  padding: 14mm 15mm;
+  padding: var(--paper-space-page-y) var(--paper-space-page-x);
   box-sizing: border-box;
   background: var(--paper);
   color: var(--ink-900);
   box-shadow: var(--shadow-paper);
   font-family: var(--font-paper);
-  font-size: 10.5pt;
+  font-size: var(--paper-text-sm);
   line-height: 1.55;
 }
 
 .paper-header {
-  margin-bottom: 7mm;
+  margin-bottom: var(--paper-space-lg);
 }
 
 .paper-name {
-  margin: 0 0 2mm;
-  font-size: 18pt;
+  margin: 0 0 var(--paper-space-sm);
+  font-size: var(--paper-text-lg);
   font-weight: 700;
   letter-spacing: 0.5px;
 }
 
 .paper-headline {
-  margin: 0 0 1mm;
-  font-size: 11pt;
+  margin: 0 0 var(--paper-space-xs);
+  font-size: var(--paper-text-base);
   color: var(--ink-700);
 }
 
 .paper-contacts {
   margin: 0;
-  font-size: 9.5pt;
+  font-size: var(--paper-text-xs);
   color: var(--ink-500);
 }
 
 .paper-section {
-  margin-bottom: 6mm;
+  margin-bottom: var(--paper-space-lg);
   break-inside: auto;
 }
 
 .paper-section-title {
-  margin: 0 0 2.5mm;
-  padding-bottom: 1mm;
+  margin: 0 0 var(--paper-space-sm);
+  padding-bottom: var(--paper-space-xs);
   border-bottom: 1px solid var(--ink-900);
-  font-size: 12pt;
+  font-size: var(--paper-text-md);
   font-weight: 700;
   break-after: avoid;
 }
 
 .paper-item {
-  margin-bottom: 3.5mm;
+  margin-bottom: var(--paper-space-md);
   break-inside: avoid;
 }
 
 .paper-item-head {
   display: flex;
   align-items: baseline;
-  gap: 2mm;
+  gap: var(--paper-space-sm);
 }
 
 /* 编辑模式：公司与职位分掉多余宽度，时间靠右且不挤占字段 */
 .paper-item-head.is-editable {
   align-items: center;
-  column-gap: 3mm;
+  column-gap: var(--paper-space-md);
 }
 
 .paper-item-head.is-editable .paper-org,
@@ -325,7 +325,7 @@ function severityClass(severity?: string): string {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 1mm;
+  gap: var(--paper-space-xs);
 }
 
 .paper-org {
@@ -338,25 +338,25 @@ function severityClass(severity?: string): string {
 
 .paper-dates {
   margin-left: auto;
-  font-size: 9.5pt;
+  font-size: var(--paper-text-xs);
   color: var(--ink-500);
   white-space: nowrap;
 }
 
 .paper-item-head.is-editable .paper-dates {
-  margin-left: 4mm;
+  margin-left: var(--paper-space-md);
 }
 
 .paper-bullets {
-  margin: 1mm 0 0;
-  padding-left: 5mm;
+  margin: var(--paper-space-xs) 0 0;
+  padding-left: var(--paper-space-list);
   list-style: none;
 }
 
 .paper-bullets li {
   position: relative;
-  margin-bottom: 0.8mm;
-  padding-left: 4mm;
+  margin-bottom: var(--paper-space-hair);
+  padding-left: var(--paper-space-md);
 }
 
 .paper-bullets li::before {
@@ -367,15 +367,15 @@ function severityClass(severity?: string): string {
 }
 
 .paper-mark {
-  padding: 0 1px;
-  border-radius: 2px;
+  padding: 0 var(--space-hair);
+  border-radius: var(--radius-paper);
   background: var(--severity-medium-soft);
   color: var(--severity-medium-ink);
 }
 
 .paper-item-head.is-marked,
 .paper-section-title.is-marked {
-  padding-left: 2mm;
+  padding-left: var(--paper-space-sm);
   box-shadow: inset 3px 0 0 var(--severity-medium);
 }
 
@@ -414,7 +414,7 @@ function severityClass(severity?: string): string {
 @media print {
   @page {
     size: A4;
-    margin: 10mm;
+    margin: var(--paper-space-xl);
   }
 
   html,

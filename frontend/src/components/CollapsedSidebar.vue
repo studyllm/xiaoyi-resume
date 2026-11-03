@@ -54,16 +54,16 @@ const uiStore = useUiStore()
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .collapsed-title {
-  font-size: 11px;
+  font-size: var(--text-2xs);
   color: var(--ink-500);
 }
 
 .collapsed-total {
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--ink-700);
 }
@@ -71,9 +71,9 @@ const uiStore = useUiStore()
 .collapsed-severity {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 4px;
-  font-size: 11px;
+  gap: var(--space-3xs);
+  padding: var(--space-3xs) var(--space-xs);
+  font-size: var(--text-2xs);
   color: var(--ink-700);
   background: transparent;
   border: none;
@@ -106,7 +106,7 @@ const uiStore = useUiStore()
 }
 
 .collapsed-structure {
-  font-size: 11px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   color: var(--severity-medium-ink);
 }

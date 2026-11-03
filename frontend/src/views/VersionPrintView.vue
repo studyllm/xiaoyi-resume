@@ -60,8 +60,8 @@ onMounted(() => {
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
   background: var(--paper);
   border-bottom: 1px solid var(--xiaoyi-border);
 }

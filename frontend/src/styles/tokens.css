@@ -40,21 +40,47 @@
     'Microsoft YaHei', sans-serif;
   --font-paper: 'Songti SC', SimSun, 'Source Han Serif SC', 'Noto Serif CJK SC', serif;
 
-  /* ---- 字号 ---- */
+  /* ---- 字号（界面）---- */
+  --text-2xs: 11px;
   --text-xs: 12px;
   --text-sm: 13px;
   --text-base: 14px;
+  --text-md: 15px;
   --text-lg: 16px;
   --text-xl: 20px;
   --text-2xl: 28px;
 
-  /* ---- 间距节奏 ---- */
+  /* ---- 字号（纸面）---- */
+  /* 纸面是打印稿，用物理单位表达尺寸，界面刻度对它不适用 */
+  --paper-text-xs: 9.5pt;
+  --paper-text-sm: 10.5pt;
+  --paper-text-base: 11pt;
+  --paper-text-md: 12pt;
+  --paper-text-lg: 18pt;
+
+  /* ---- 间距节奏（界面）---- */
+  --space-hair: 1px;
+  --space-3xs: 2px;
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 12px;
   --space-lg: 16px;
   --space-xl: 24px;
   --space-2xl: 32px;
+  --space-3xl: 48px;
+
+  /* ---- 间距节奏（纸面）---- */
+  --paper-space-hair: 0.8mm;
+  --paper-space-xs: 1mm;
+  --paper-space-sm: 2mm;
+  --paper-space-md: 4mm;
+  --paper-space-list: 5mm;
+  --paper-space-lg: 6mm;
+  --paper-space-indent: 9mm;
+  --paper-space-xl: 10mm;
+  /* 页边距：横竖不同，两边都不归并——打印参数是有意定的 */
+  --paper-space-page-y: 14mm;
+  --paper-space-page-x: 15mm;
 
   /* ---- 纸面尺寸 ---- */
   --paper-width: 210mm;

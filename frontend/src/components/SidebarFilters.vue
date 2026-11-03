@@ -46,8 +46,8 @@ const emit = defineEmits<{
 <style scoped>
 .sidebar-filters {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
 }
 
 .sidebar-filters :deep(.el-select) {

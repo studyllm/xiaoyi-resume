@@ -86,7 +86,7 @@ const emit = defineEmits<{
   display: flex;
   width: 100%;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--space-sm);
   min-width: 0;
 }
 

@@ -286,52 +286,52 @@ async function exportPdf(): Promise<void> {
 
 <style scoped>
 .description {
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-md);
 }
 
 .integrity-alert {
-  margin-top: 12px;
+  margin-top: var(--space-md);
 }
 
 .version-body {
   margin: 0;
-  padding: 16px;
+  padding: var(--space-lg);
   background: var(--paper);
   border: 1px solid var(--xiaoyi-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   line-height: 1.9;
 }
 
 .diff-group {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-xl);
 }
 
 .diff-group-title {
-  margin: 0 0 10px;
-  font-size: 15px;
+  margin: 0 0 var(--space-md);
+  font-size: var(--text-md);
 }
 
 .diff-card {
-  margin-bottom: 10px;
+  margin-bottom: var(--space-md);
 }
 
 .diff-tags {
-  margin-bottom: 10px;
+  margin-bottom: var(--space-md);
 }
 
 .diff-columns {
-  margin-top: 4px;
+  margin-top: var(--space-xs);
 }
 
 .diff-column-label {
-  margin-bottom: 4px;
-  font-size: 12px;
+  margin-bottom: var(--space-xs);
+  font-size: var(--text-xs);
   color: var(--xiaoyi-muted);
 }
 
 .diff-text {
-  padding: 8px 10px;
-  border-radius: 4px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
   line-height: 1.7;
 }
 

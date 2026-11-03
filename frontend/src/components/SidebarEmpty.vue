@@ -32,18 +32,18 @@ const emit = defineEmits<{
 
 <style scoped>
 .sidebar-empty {
-  padding: 12px 4px;
+  padding: var(--space-md) var(--space-xs);
 }
 
 .sidebar-empty-title {
-  margin: 0 0 4px;
-  font-size: 13px;
+  margin: 0 0 var(--space-xs);
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
 .sidebar-empty-text {
-  margin: 0 0 10px;
-  font-size: 12px;
+  margin: 0 0 var(--space-md);
+  font-size: var(--text-xs);
   line-height: 1.7;
   color: var(--ink-500);
 }

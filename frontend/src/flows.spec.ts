@@ -560,22 +560,25 @@ describe('品牌标识', () => {
 })
 
 describe('落地页的形态', () => {
-  /** 落地页的样式块。 */
-  function landingStyle(): string {
-    const content = readFileSync(join(viewsDirectory(), 'WelcomeView.vue'), 'utf8')
-    return /<style[^>]*>([\s\S]*)<\/style>/.exec(content)?.[1] ?? ''
-  }
-
-  it('落地页的字号、圆角与间距都走设计变量', () => {
-    // 只扫落地页：存量其它组件还有八十余处写死的 px，不在本轮范围内，
-    // 一起改会让这条守卫立刻失效，等于没有守卫。
-    const offenders = [
-      ...landingStyle().matchAll(
-        /(?:font-size|border-radius|padding|margin|gap|row-gap|column-gap)\s*:\s*([^;]+);/g,
-      ),
-    ]
-      .map((match) => match[0].trim())
-      .filter((declaration) => /\d+px/.test(declaration))
+  it('全仓的字号、圆角与间距都走设计变量', () => {
+    // 纸面是打印稿，用 pt/mm 表达物理尺寸，界面刻度对它不适用——所以只禁 px。
+    // 几何尺寸（width / height / top / border-width）不受这条约束。
+    const offenders: string[] = []
+    for (const file of styleFiles()) {
+      const content = readFileSync(file, 'utf8')
+      const blocks = file.endsWith('.vue')
+        ? [...content.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((match) => match[1] ?? '')
+        : [content]
+      blocks.forEach((block) => {
+        for (const match of block.matchAll(
+          /(?:font-size|border-radius|padding|margin|gap|row-gap|column-gap)[a-z-]*\s*:\s*([^;]+);/g,
+        )) {
+          if (/\d+px/.test(match[0])) {
+            offenders.push(`${file.replace(`${process.cwd()}/`, '')} ${match[0].trim()}`)
+          }
+        }
+      })
+    }
     expect(offenders).toEqual([])
   })
 

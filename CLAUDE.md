@@ -63,6 +63,8 @@ docs/         产品需求文档
 `frontend/src/styles/tokens.css` 是**唯一允许写死视觉字面量**的文件。其余 `.vue` / `.css` 文件一律引用变量。
 
 - 颜色、字号、圆角、阴影、间距一律取自 CSS 变量；**不得出现 `#hex`、`rgb()`、`rgba()` 字面量**（`flows.spec.ts` 会扫描并让测试失败）。
+- **尺寸也走变量**：`font-size`、`border-radius`、`padding`、`margin`、`gap` 及其长写形式不得出现 px 字面量（守卫扫全量样式文件，不只是落地页）。几何尺寸（`width` / `height` / `top` / `border-width`）不受这条约束——那是布局结果，不是设计刻度。
+- **界面与纸面用两套刻度**：界面用 px 刻度（`--space-*` / `--text-*` / `--radius-*`），纸面用 pt 与 mm 表达物理尺寸（`--paper-text-*` / `--paper-space-*`）——纸面要打印，物理单位才对，把 pt 折算成 px 再折算回去会引入误差。守卫只禁 px，纸面的 pt 与 mm 放行。
 - 变量分组：`--ink-900/700/500/300/150/80`（文字与分隔线梯度）、`--paper`/`--desk`（纸与桌面）、`--brand*`（主色）、`--severity-*`/`--ok*`（语义色）、`--font-ui`/`--font-paper`（字体分层）、`--text-*`/`--space-*`/`--radius-*`/`--shadow-*`。
 - 打印样式沿用同一套变量，导出 PDF 与预览必须一致。
 

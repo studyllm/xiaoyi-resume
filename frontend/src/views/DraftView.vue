@@ -205,13 +205,13 @@ watch(
 <style scoped>
 /* 页头的诊断提示：刻意做轻，计数与文字都是弱化灰，只有链接用主色 */
 .draft-hint {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--ink-500);
 }
 
 .draft-hint :deep(.el-link) {
-  margin-left: 4px;
-  font-size: 12px;
+  margin-left: var(--space-xs);
+  font-size: var(--text-xs);
   vertical-align: baseline;
 }
 
