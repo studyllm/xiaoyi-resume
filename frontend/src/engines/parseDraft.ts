@@ -8,18 +8,99 @@ import type { EngineContext, ParseResult } from './types'
 
 export const LOW_CONFIDENCE_THRESHOLD = 0.6
 
-const HEADER_KEYWORDS: Array<{ kind: SectionKind; keywords: string[] }> = [
-  { kind: 'education', keywords: ['教育背景', '教育经历', '教育情况', '学习经历', '学历背景', '教育'] },
+/**
+ * 分区表头关键词。
+ *
+ * 顺序有意义：**长词必须排在短词前面**（「工作经历」在「工作」之前）。匹配取第一个
+ * 命中的，短词先命中会把「工作经历与项目经历」这类复合表头截断。
+ */
+export const HEADER_KEYWORDS: Array<{ kind: SectionKind; keywords: string[] }> = [
+  {
+    kind: 'education',
+    keywords: [
+      '教育与培训', '教育背景', '教育经历', '教育情况', '学习经历', '学历背景', '教育',
+      'Educational Background', 'Educational Experience', 'Academic Background', 'Education',
+    ],
+  },
   {
     kind: 'experience',
-    keywords: ['工作经历', '工作经验', '工作履历', '职业经历', '实习经历', '任职经历', '工作'],
+    keywords: [
+      '工作经历', '工作经验', '工作履历', '职业经历', '实习经历', '任职经历', '工作背景', '工作',
+      'Professional Experience', 'Working Experience', 'Work Experience', 'Employment History',
+      'Career History', 'Work History', 'Experience',
+    ],
   },
-  { kind: 'project', keywords: ['项目经历', '项目经验', '项目实践', '主要项目', '项目'] },
-  { kind: 'skills', keywords: ['专业技能', '技术技能', '技能特长', '个人技能', '技术栈', '技能'] },
+  {
+    kind: 'project',
+    keywords: [
+      '项目经历', '项目经验', '项目实践', '主要项目', '代表性项目', '项目',
+      'Project Experience', 'Selected Projects', 'Key Projects', 'Projects', 'Project',
+    ],
+  },
+  {
+    kind: 'skills',
+    keywords: [
+      '专业技能', '技术技能', '核心技能', '技能特长', '个人技能', '技术栈', 'IT技能',
+      '核心优势', '个人能力', '专业能力', '擅长技能', '技能',
+      'Technical Skills', 'Core Competencies', 'Skill Highlights', 'Technical Stack',
+      'Qualifications', 'Core Skills', 'Skills',
+    ],
+  },
 ]
 
-const BULLET_MARKERS = ['·', '•', '‧', '▪', '●', '⁃', '*', '-']
+/** 复合表头里出现的连接词，如「工作经历与项目经历」。 */
+const CONNECTOR_PATTERN = /^[与和、及／/]/
+
+/** 标题里的中文，用于判断表头后面接的是不是中文描述。 */
 const CJK_PATTERN = /[一-鿿]/
+
+/**
+ * 表头归一化：去掉空格与常见标点。
+ * 关键词与待匹配文本两侧同样处理，「Work Experience」与「WorkExperience」才等值。
+ */
+function normalizeHeader(text: string): string {
+  return text.replace(/[\s：:，,。.、]/g, '')
+}
+
+/**
+ * 剥掉行首的序号与装饰符号。
+ *
+ * 序号里的数字限 1–3 位——否则「2021.03」这样的日期行会被剥掉前缀。
+ */
+function stripDecoration(line: string): string {
+  let text = line.trim()
+  text = text.replace(/^[【\[（(《〈]\s*/, '').replace(/\s*[】\]）)》〉]$/, '')
+  text = text.replace(/^(?:[一二三四五六七八九十百]{1,3}|\d{1,3})\s*[、.．,，)）:：]\s*/, '')
+  text = text.replace(/^\d{1,3}\s*/, '')
+  text = text.replace(/^[◆■●○★☆※·\-—–_]+\s*/, '')
+  return text.trim()
+}
+
+/**
+ * 判断一段文字是不是某个分区的表头。
+ *
+ * 关键词后面只能接三种东西：什么都没有、复合表头的连接词、或者不含中文的补充说明
+ * （英文副标题）。**关键词后面紧跟中文描述时不算表头**——否则「工作负责得很全面」
+ * 这类要点会被当成分区表头，整行内容从此消失。
+ */
+function kindOfHeaderText(text: string): SectionKind | null {
+  const normalized = normalizeHeader(text)
+  if (!normalized) return null
+
+  for (const { kind, keywords } of HEADER_KEYWORDS) {
+    for (const keyword of keywords) {
+      const key = normalizeHeader(keyword)
+      if (!key) continue
+      if (normalized === key) return kind
+      if (!normalized.startsWith(key)) continue
+      const rest = normalized.slice(key.length)
+      if (rest === '' || CONNECTOR_PATTERN.test(rest) || !CJK_PATTERN.test(rest)) return kind
+    }
+  }
+  return null
+}
+
+const BULLET_MARKERS = ['·', '•', '‧', '▪', '●', '⁃', '*', '-']
 
 interface SectionBucket {
   items: DraftItem[]
@@ -40,23 +121,19 @@ function stripBulletMarker(line: string): string | null {
 }
 
 function headerKindOf(line: string): SectionKind | null {
-  const colonIndex = line.search(/[：:]/)
+  const cleaned = stripDecoration(line)
+
+  // 冒号路径：冒号前的部分
+  const colonIndex = cleaned.search(/[：:]/)
   if (colonIndex > 0) {
-    const head = line.slice(0, colonIndex).trim()
-    for (const { kind, keywords } of HEADER_KEYWORDS) {
-      if (keywords.includes(head)) return kind
-    }
+    const kind = kindOfHeaderText(cleaned.slice(0, colonIndex).trim())
+    if (kind) return kind
   }
 
-  const normalized = line.replace(/[\s：:，,。.、]/g, '')
-  if (normalized.length > 12) return null
-
-  for (const { kind, keywords } of HEADER_KEYWORDS) {
-    for (const keyword of keywords) {
-      if (normalized.startsWith(keyword)) return kind
-    }
-  }
-  return null
+  // 整行：中文部分优先（中英混排时按中文认），没有中文时整行算
+  const cjk = cleaned.match(/^[一-鿿][一-鿿\s]*/)
+  const part = cjk ? cjk[0].trim() : cleaned.trim()
+  return kindOfHeaderText(part)
 }
 
 function splitOrgTitle(text: string): { org?: string; title?: string } {
