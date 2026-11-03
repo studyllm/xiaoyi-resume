@@ -46,7 +46,7 @@ describe('parseDraft', () => {
     expect(result.failure?.reason).toBe('unrecognized')
   })
 
-  it('parses a standard chinese resume into the four sections', () => {
+  it('parses a standard chinese resume into the four known sections', () => {
     const result = parseDraft(STANDARD, CTX, createIdSeed())
     expect(result.ok).toBe(true)
     expect(result.failure).toBeNull()
@@ -268,5 +268,78 @@ describe('parseDraft 的分区表头识别', () => {
         }
       }
     }
+  })
+})
+
+describe('parseDraft 的「其它」分区', () => {
+  const WITH_OTHER = `工作经历
+美团 前端工程师 2021-03 - 至今
+· 负责公司营销活动页面的前端开发
+自我评价
+· 团队协作良好，认真负责
+获奖经历
+· 年度技术突破奖
+`
+
+  it('其它类表头下面的内容进「其它」分区', () => {
+    const result = parseDraft(WITH_OTHER, CTX, createIdSeed())
+    expect(result.ok).toBe(true)
+
+    const other = result.draft!.sections.find((section) => section.kind === 'other')
+    expect(other).toBeDefined()
+    expect(other!.items.length).toBe(1)
+    expect(other!.items[0]!.bullets.map((bullet) => bullet.text)).toEqual([
+      '团队协作良好，认真负责',
+      '年度技术突破奖',
+    ])
+  })
+
+  it('其它类表头不再被并进上一个分区', () => {
+    const result = parseDraft(WITH_OTHER, CTX, createIdSeed())
+    const experience = result.draft!.sections.find((section) => section.kind === 'experience')
+    expect(experience!.items[0]!.bullets.map((bullet) => bullet.text)).toEqual([
+      '负责公司营销活动页面的前端开发',
+    ])
+  })
+
+  it('被放进「其它」的表头会被列出来', () => {
+    const result = parseDraft(WITH_OTHER, CTX, createIdSeed())
+    expect(result.otherHeaders).toEqual(['自我评价', '获奖经历'])
+  })
+
+  it('没有其它类表头时清单是空的', () => {
+    const result = parseDraft(STANDARD, CTX, createIdSeed())
+    expect(result.otherHeaders).toEqual([])
+  })
+
+  it('没有其它类表头时不产生「其它」分区', () => {
+    const result = parseDraft(STANDARD, CTX, createIdSeed())
+    const other = result.draft!.sections.find((section) => section.kind === 'other')
+    expect(other).toBeUndefined()
+    expect(result.confidence).toBe(1)
+  })
+
+  it('「其它」为空时不产生解析警告', () => {
+    const result = parseDraft(STANDARD, CTX, createIdSeed())
+    expect(result.warnings.some((warning) => warning.includes('其它'))).toBe(false)
+  })
+
+  it('普通要点不会被当成其它类表头', () => {
+    const result = parseDraft(
+      `工作经历\n美团 前端工程师 2021-03 - 至今\n沟通良好\n责任心强\n`,
+      CTX,
+      createIdSeed(),
+    )
+    expect(result.otherHeaders).toEqual([])
+    const experience = result.draft!.sections.find((section) => section.kind === 'experience')
+    expect(experience!.items[0]!.bullets.map((bullet) => bullet.text)).toEqual([
+      '沟通良好',
+      '责任心强',
+    ])
+  })
+
+  it('解析失败时清单是空的', () => {
+    const result = parseDraft('   \n  ', CTX, createIdSeed())
+    expect(result.otherHeaders).toEqual([])
   })
 })

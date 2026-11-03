@@ -173,3 +173,30 @@ describe('findStructureFindings', () => {
     }
   })
 })
+
+describe('「其它」分区的结构检查', () => {
+  it('不报告它缺少机构名、职位与起止年月', () => {
+    const findings = findStructureFindings(
+      makeDraft({
+        other: [{ id: 'other-1', bullets: ['团队协作良好，认真负责'] }],
+      }),
+    )
+    expect(findings.some((finding) => finding.sectionKind === 'other')).toBe(false)
+  })
+
+  it('为空时不报告分区为空', () => {
+    const findings = findStructureFindings(makeDraft({}))
+    expect(findings.some((finding) => finding.ruleId === 'empty-section' && finding.sectionKind === 'other')).toBe(
+      false,
+    )
+  })
+
+  it('主分区缺字段照旧报告', () => {
+    const findings = findStructureFindings(
+      makeDraft({
+        experience: [{ id: 'exp-1', bullets: ['负责页面开发'] }],
+      }),
+    )
+    expect(findings.some((finding) => finding.ruleId === 'missing-org')).toBe(true)
+  })
+})

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { EMPTY_PROFILE, type SectionKind } from '@/domain/types'
+import { EMPTY_PROFILE, hasItemHead, type SectionKind } from '@/domain/types'
 
 export interface PreviewBullet {
   id: string
@@ -87,7 +87,7 @@ function sectionKey(section: PreviewSection): string {
 
 /** 专业技能只有一行行技能，没有公司、职位与时间。 */
 function showFields(section: PreviewSection): boolean {
-  return section.kind !== 'skills'
+  return hasItemHead(section.kind)
 }
 
 function dateLabel(item: PreviewItem): string {

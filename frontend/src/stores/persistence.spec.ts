@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import type { Draft } from '@/domain/types'
 import {
   createPersistence,
   draftKey,
@@ -235,5 +236,41 @@ describe('旧存档按用户拆开', () => {
     const persistence = createPersistence(memoryAdapter(), true)
     splitLegacySlots(persistence)
     expect(persistence.read(draftKey('user-张三'))).toBeNull()
+  })
+})
+
+describe('「其它」分区的存档往返', () => {
+  it('写入含「其它」的底稿，读回来分区种类不变', () => {
+    const persistence = createPersistence(memoryAdapter(), true)
+    const draft = {
+      id: 'draft-1',
+      userId: 'user-1',
+      revision: 1,
+      profile: { name: '', headline: '', contacts: [] },
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      sections: [
+        { id: 'sec-other', kind: 'other', title: '其它', items: [] },
+        { id: 'sec-skills', kind: 'skills', title: '专业技能', items: [] },
+      ],
+    }
+    persistence.write(draftKey('user-1'), draft)
+
+    const read = persistence.read<Draft>(draftKey('user-1'))
+    expect(read?.sections.map((section) => section.kind)).toEqual(['other', 'skills'])
+  })
+
+  it('只有四个分区的旧存档读出来不变', () => {
+    const persistence = createPersistence(memoryAdapter(), true)
+    persistence.write(draftKey('user-2'), {
+      id: 'draft-2',
+      userId: 'user-2',
+      revision: 1,
+      profile: { name: '', headline: '', contacts: [] },
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      sections: [{ id: 'sec-skills', kind: 'skills', title: '专业技能', items: [] }],
+    })
+
+    const read = persistence.read<Draft>(draftKey('user-2'))
+    expect(read?.sections.map((section) => section.kind)).toEqual(['skills'])
   })
 })
