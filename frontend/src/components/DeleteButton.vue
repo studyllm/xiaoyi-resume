@@ -36,6 +36,6 @@ const emit = defineEmits<{
 
 <style scoped>
 .paper-action {
-  margin-left: 6px;
+  margin-left: var(--space-sm);
 }
 </style>

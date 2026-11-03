@@ -71,7 +71,7 @@ function dateRange(start?: YearMonth | null, end?: YearMonth | null, present?: b
 
 .paper-date-field :deep(.el-input__inner) {
   font-family: var(--font-paper);
-  font-size: 9.5pt;
+  font-size: var(--paper-text-xs);
   color: var(--ink-500);
 }
 
@@ -82,16 +82,16 @@ function dateRange(start?: YearMonth | null, end?: YearMonth | null, present?: b
 
 .paper-date-sep {
   color: var(--ink-500);
-  margin: 0 2px;
+  margin: 0 var(--space-3xs);
 }
 
 .paper-present {
-  margin-left: 4px;
+  margin-left: var(--space-xs);
 }
 
 .paper-present :deep(.el-checkbox__label) {
   font-family: var(--font-paper);
-  font-size: 9.5pt;
+  font-size: var(--paper-text-xs);
   color: var(--ink-500);
 }
 </style>

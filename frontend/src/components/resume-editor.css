@@ -1,5 +1,5 @@
 .paper-input--name :deep(.el-input__inner) {
-  font-size: 18pt;
+  font-size: var(--paper-text-lg);
   font-weight: 700;
 }
 
@@ -22,7 +22,7 @@
 }
 
 .paper-bullet-text {
-  border-radius: 2px;
+  border-radius: var(--radius-paper);
 }
 
 .resume-editor.is-editable .paper-bullet-text {
@@ -38,10 +38,10 @@
 .paper-add {
   display: block;
   width: 100%;
-  margin: 2mm 0 0;
-  padding: 3px 0;
+  margin: var(--paper-space-sm) 0 0;
+  padding: var(--space-3xs) 0;
   font-family: var(--font-paper);
-  font-size: 10.5pt;
+  font-size: var(--paper-text-sm);
   text-align: left;
   color: var(--ink-300);
   background: transparent;
@@ -64,12 +64,12 @@
 /* 条目里的「新增一条要点」缩进到跟要点正文对齐：它是这条经历的下一步 */
 .paper-add--nested {
   width: calc(100% - 9mm);
-  margin-left: 9mm;
+  margin-left: var(--paper-space-indent);
 }
 
 /* 抬头的底边距让给这条按钮，避免它掉进灰底，也避免和下一个分区贴上 */
 .paper-add--after-header {
-  margin-bottom: 7mm;
+  margin-bottom: var(--paper-space-lg);
 }
 
 /* ============================================================
@@ -84,16 +84,16 @@
 }
 
 .resume-editor.is-editable :deep(.paper-header-body) {
-  padding: 4px 10px;
-  margin: 0 -10px;
+  padding: var(--space-xs) var(--space-md);
+  margin: 0 calc(-1 * var(--space-md));
   border-radius: var(--radius-sm);
   background: var(--ink-80);
   transition: background 0.15s ease;
 }
 
 .resume-editor.is-editable :deep(.paper-item-head) {
-  padding: 3px 8px;
-  margin: 0 -8px;
+  padding: var(--space-3xs) var(--space-sm);
+  margin: 0 calc(-1 * var(--space-sm));
   border-radius: var(--radius-sm);
   background: var(--ink-80);
   transition: background 0.15s ease;
@@ -104,8 +104,8 @@
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  padding: 2px 8px 2px 4mm;
-  margin: 0 -8px 0.8mm 0;
+  padding: var(--space-3xs) var(--space-sm) var(--space-3xs) var(--paper-space-md);
+  margin: 0 calc(-1 * var(--space-sm)) var(--paper-space-hair) 0;
   border-radius: var(--radius-sm);
   background: var(--ink-80);
   transition: background 0.15s ease;
@@ -134,8 +134,8 @@
 /* 抬头装着姓名、定位与联系方式四行，hover 要细到行：鼠标在哪一行，哪一行才变 */
 .resume-editor.is-editable :deep(.paper-name),
 .resume-editor.is-editable :deep(.paper-headline) {
-  padding: 1px 4px;
-  margin-left: -4px;
+  padding: var(--space-hair) var(--space-xs);
+  margin-left: calc(-1 * var(--space-xs));
   border-radius: var(--radius-sm);
 }
 
@@ -176,7 +176,7 @@
 
 /* 正在编辑的要点 */
 .resume-editor.is-editable .paper-textarea:focus {
-  border-radius: 2px;
+  border-radius: var(--radius-paper);
   box-shadow: var(--shadow-focus);
 }
 

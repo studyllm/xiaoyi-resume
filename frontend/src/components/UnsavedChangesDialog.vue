@@ -31,15 +31,15 @@ const uiStore = useUiStore()
 
 <style scoped>
 .unsaved-lead {
-  margin: 0 0 12px;
-  font-size: 13px;
+  margin: 0 0 var(--space-md);
+  font-size: var(--text-sm);
   color: var(--ink-700);
 }
 
 .unsaved-options {
   margin: 0;
-  padding-left: 18px;
-  font-size: 13px;
+  padding-left: var(--space-lg);
+  font-size: var(--text-sm);
   color: var(--ink-500);
   line-height: 1.9;
 }

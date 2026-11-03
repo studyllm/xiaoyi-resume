@@ -224,12 +224,12 @@ onBeforeUnmount(() => {
 
 /* 折叠成窄条时也要看得见里面有什么 */
 .sidebar-head {
-  padding: 10px 12px;
+  padding: var(--space-md) var(--space-md);
   border-bottom: 1px solid var(--xiaoyi-border);
 }
 
 .comment-sidebar.is-collapsed .sidebar-head {
-  padding: 10px 6px;
+  padding: var(--space-md) var(--space-sm);
 }
 
 .sidebar-title {
@@ -240,6 +240,6 @@ onBeforeUnmount(() => {
 .sidebar-body {
   flex: 1;
   overflow-y: auto;
-  padding: 10px 12px;
+  padding: var(--space-md) var(--space-md);
 }
 </style>

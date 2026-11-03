@@ -63,18 +63,18 @@ function stripSummary(issues: DiagnosisIssue[]): string {
 
 <style scoped>
 .paper-comment {
-  margin-top: 4px;
+  margin-top: var(--space-xs);
 }
 
 /* 纸面上的批注：一行细标注，不占地方，也一眼看得出不是简历正文 */
 .comment-strip {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--space-sm);
   /* 左边缩进 14px，宽度要跟着减，不然「展开」会挂到版心外面 */
   width: calc(100% - 14px);
-  margin-left: 14px;
-  padding: 1px 0 1px 10px;
+  margin-left: var(--space-lg);
+  padding: var(--space-hair) 0 var(--space-hair) var(--space-md);
   font-family: var(--font-ui);
   font-size: var(--text-xs);
   text-align: left;
@@ -117,7 +117,7 @@ function stripSummary(issues: DiagnosisIssue[]): string {
 
 /* 展开后每条批注一行：问题和建议，完整的批注卡在右侧批注栏 */
 .comment-inline {
-  margin: 2px 0 2px 14px;
+  margin: var(--space-3xs) 0 var(--space-3xs) var(--space-lg);
   padding: 0;
   list-style: none;
   font-family: var(--font-ui);
@@ -128,7 +128,7 @@ function stripSummary(issues: DiagnosisIssue[]): string {
 .comment-inline-row {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--space-sm);
   cursor: pointer;
 }
 

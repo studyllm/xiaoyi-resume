@@ -155,24 +155,24 @@ function remove(id: string): void {
 .version-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .version-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .version-card-name {
-  font-size: 15px;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
 .version-card-jd {
-  margin: 6px 0 10px;
-  font-size: 13px;
+  margin: var(--space-sm) 0 var(--space-md);
+  font-size: var(--text-sm);
   line-height: 1.7;
   color: var(--ink-500);
   display: -webkit-box;
@@ -183,9 +183,9 @@ function remove(id: string): void {
 
 /* 生成时间一行，操作按钮另起一行：窄卡片里挤在一行会把时间顶开 */
 .version-card-meta {
-  padding-top: 8px;
+  padding-top: var(--space-sm);
   border-top: 1px solid var(--ink-150);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 /* 操作按钮与生成时间左对齐：按钮自身的内边距会让第一个图标缩进去 */
@@ -193,10 +193,10 @@ function remove(id: string): void {
   display: flex;
   align-items: center;
   /* 组件库自带 .el-button + .el-button 的 12px 间距，这里只补上剩下的 */
-  gap: 4px;
+  gap: var(--space-xs);
   /* 按钮在这一行里均分，删除落在最右 */
   justify-content: space-between;
-  margin-top: 6px;
+  margin-top: var(--space-sm);
 }
 
 .version-card-actions :deep(.el-button) {

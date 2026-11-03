@@ -71,12 +71,12 @@ const severityType = computed(() => {
 
 <style scoped>
 .comment {
-  padding: 10px 12px;
-  margin-bottom: 10px;
+  padding: var(--space-md) var(--space-md);
+  margin-bottom: var(--space-md);
   background: var(--paper);
   border: 1px solid var(--xiaoyi-border);
   border-left: 3px solid var(--ink-300);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 
@@ -104,34 +104,34 @@ const severityType = computed(() => {
 .comment-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 6px;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-sm);
 }
 
 .comment-anchor {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-xs);
   color: var(--severity-medium-ink);
   background: var(--severity-medium-soft);
-  padding: 3px 6px;
-  border-radius: 3px;
+  padding: var(--space-3xs) var(--space-sm);
+  border-radius: var(--radius-sm);
 }
 
 .comment-problem {
-  margin: 0 0 6px;
-  font-size: 13px;
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
 .comment-suggestion {
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.6;
   color: var(--ink-700);
 }
 
 .comment-actions {
   display: flex;
-  gap: 2px;
-  margin-top: 4px;
+  gap: var(--space-3xs);
+  margin-top: var(--space-xs);
 }
 </style>

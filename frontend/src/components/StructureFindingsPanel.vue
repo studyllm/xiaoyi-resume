@@ -37,7 +37,7 @@ function anchorOf(finding: StructureFinding): string {
 
 <style scoped>
 .structure-panel {
-  padding: 10px 12px;
+  padding: var(--space-md) var(--space-md);
   background: var(--severity-medium-soft);
   border-bottom: 1px solid var(--severity-medium);
 }
@@ -45,9 +45,9 @@ function anchorOf(finding: StructureFinding): string {
 .structure-panel-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 0 0 6px;
-  font-size: 12px;
+  gap: var(--space-sm);
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--severity-medium-ink);
 }
@@ -62,8 +62,8 @@ function anchorOf(finding: StructureFinding): string {
 .structure-item {
   display: block;
   width: 100%;
-  padding: 4px 0;
-  font-size: 12px;
+  padding: var(--space-xs) 0;
+  font-size: var(--text-xs);
   text-align: left;
   color: var(--ink-700);
   background: transparent;

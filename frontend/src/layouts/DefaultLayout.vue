@@ -172,7 +172,7 @@ function logout(): void {
   display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
-  font-size: 16px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--xiaoyi-text);
   text-decoration: none;
@@ -199,13 +199,13 @@ function logout(): void {
 }
 
 .sidebar-outline {
-  padding: 10px 12px;
+  padding: var(--space-md) var(--space-md);
   border-top: 1px solid var(--ink-150);
 }
 
 .sidebar-outline-title {
-  margin-bottom: 6px;
-  font-size: 11px;
+  margin-bottom: var(--space-sm);
+  font-size: var(--text-2xs);
   color: var(--ink-500);
 }
 
@@ -214,8 +214,8 @@ function logout(): void {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 5px 8px;
-  font-size: 13px;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-sm);
   text-align: left;
   color: var(--ink-700);
   background: transparent;
@@ -230,14 +230,14 @@ function logout(): void {
 }
 
 .sidebar-outline-count {
-  font-size: 11px;
+  font-size: var(--text-2xs);
   color: var(--ink-500);
 }
 
 .sidebar-foot {
   margin-top: auto;
-  padding: 12px;
-  font-size: 11px;
+  padding: var(--space-md);
+  font-size: var(--text-2xs);
   line-height: 1.6;
   color: var(--ink-500);
   border-top: 1px solid var(--ink-150);

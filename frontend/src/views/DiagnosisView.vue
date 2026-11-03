@@ -212,7 +212,7 @@ watch(
 
 .resume-canvas {
   background: var(--desk);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 </style>

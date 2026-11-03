@@ -220,6 +220,6 @@ watch(
 
 <style scoped>
 .import-actions {
-  margin-top: 12px;
+  margin-top: var(--space-md);
 }
 </style>

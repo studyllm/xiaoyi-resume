@@ -331,11 +331,11 @@ function loadDemo(): void {
 
 <style scoped>
 .import-actions {
-  margin-top: 12px;
+  margin-top: var(--space-md);
 }
 
 .upload-drop {
-  margin-top: 16px;
+  margin-top: var(--space-lg);
 }
 
 /* 解析结果的小标题：与纸同宽 */
@@ -351,7 +351,7 @@ function loadDemo(): void {
 }
 
 .issue-list {
-  margin: 4px 0 0;
-  padding-left: 18px;
+  margin: var(--space-xs) 0 0;
+  padding-left: var(--space-lg);
 }
 </style>
