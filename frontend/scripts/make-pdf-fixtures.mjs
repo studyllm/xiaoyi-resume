@@ -9,8 +9,9 @@
 //   resume-sparse-text.pdf   只有几个字，模拟识别率极低的扫描件
 //   resume-two-column.pdf    左右两栏，两栏都有相当分量的文字
 //   resume-core-skills.pdf   分区写成「核心技能」，复现用户报的丢内容问题
+//   resume-self-review.pdf   带「自我评价」「获奖经历」这类没有位置归属的分区
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -86,13 +87,41 @@ const coreSkills = page(`
   <ul><li>前端：Vue、React、TypeScript、Vite、Webpack</li></ul>
 `)
 
+// 「自我评价」「获奖经历」不对应四个主分区，它们下面的内容进「其它」分区
+const selfReview = page(`
+  <h2>工作经历</h2>
+  <div class="row"><span>美团 前端工程师</span><span>2021-03 - 至今</span></div>
+  <ul><li>负责公司营销活动页面的前端开发，配合设计团队完成活动上线</li></ul>
+  <h2>自我评价</h2>
+  <ul><li>团队协作良好，认真负责，积极向上</li></ul>
+  <h2>获奖经历</h2>
+  <ul><li>年度技术突破奖</li></ul>
+`)
+
 const fixtures = [
   { name: 'resume-text-layer.pdf', html: withText },
   { name: 'resume-no-text.pdf', html: noText },
   { name: 'resume-sparse-text.pdf', html: sparseText },
   { name: 'resume-two-column.pdf', html: twoColumn },
   { name: 'resume-core-skills.pdf', html: coreSkills },
+  { name: 'resume-self-review.pdf', html: selfReview },
 ]
+
+/**
+ * 固定 PDF 里的时间戳。
+ *
+ * Chrome 生成的 PDF 带 CreationDate 与 ModDate，**每次重新生成字节都不同**。
+ * 同一个样例在两个分支上 SHA 不同，GitHub 三方合并时二进制文件无解，会直接
+ * 报冲突。把日期换成常量后，同样的 HTML 永远生成同样的字节——重新生成样例
+ * 不再产生任何差异。
+ */
+const FIXED_PDF_DATE = 'D:20260101000000'
+
+function normalizeTimestamp(file) {
+  const buffer = readFileSync(file)
+  const normalized = buffer.toString('latin1').replace(/D:\d{14}/g, FIXED_PDF_DATE)
+  writeFileSync(file, Buffer.from(normalized, 'latin1'))
+}
 
 const workDir = mkdtempSync(resolve(tmpdir(), 'pdf-fixtures-'))
 
@@ -112,6 +141,7 @@ try {
       ],
       { stdio: 'ignore' },
     )
+    normalizeTimestamp(outPath)
     console.log(`已生成：src/mock/${fixture.name}`)
   }
 } finally {
