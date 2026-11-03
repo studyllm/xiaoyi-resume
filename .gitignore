@@ -14,3 +14,6 @@ coverage
 
 # 本机私有的 Claude Code 配置（项目共享的 commands/skills 仍入库）
 .claude/settings.local.json
+
+# pdf.js 的运行时资源，由 npm run predev / prebuild 从 node_modules 拷贝而来
+frontend/public/pdfjs/
