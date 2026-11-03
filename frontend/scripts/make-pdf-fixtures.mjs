@@ -8,6 +8,7 @@
 //   resume-no-text.pdf       一个字都没有，模拟扫描件
 //   resume-sparse-text.pdf   只有几个字，模拟识别率极低的扫描件
 //   resume-two-column.pdf    左右两栏，两栏都有相当分量的文字
+//   resume-core-skills.pdf   分区写成「核心技能」，复现用户报的丢内容问题
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -76,11 +77,21 @@ const twoColumn = page(
    </div></body>`,
 )
 
+// 「核心技能」这种写法此前认不出来，整段内容会被吞进上一个分区
+const coreSkills = page(`
+  <h2>工作经历</h2>
+  <div class="row"><span>美团 前端工程师</span><span>2021-03 - 至今</span></div>
+  <ul><li>负责公司营销活动页面的前端开发，配合设计团队完成活动上线</li></ul>
+  <h2>核心技能</h2>
+  <ul><li>前端：Vue、React、TypeScript、Vite、Webpack</li></ul>
+`)
+
 const fixtures = [
   { name: 'resume-text-layer.pdf', html: withText },
   { name: 'resume-no-text.pdf', html: noText },
   { name: 'resume-sparse-text.pdf', html: sparseText },
   { name: 'resume-two-column.pdf', html: twoColumn },
+  { name: 'resume-core-skills.pdf', html: coreSkills },
 ]
 
 const workDir = mkdtempSync(resolve(tmpdir(), 'pdf-fixtures-'))

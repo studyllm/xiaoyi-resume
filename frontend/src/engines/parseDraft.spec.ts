@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { createIdSeed } from '@/domain/ids'
 import type { Draft } from '@/domain/types'
 import type { EngineContext } from './types'
-import { parseDraft } from './parseDraft'
+import { HEADER_KEYWORDS, LOW_CONFIDENCE_THRESHOLD, parseDraft } from './parseDraft'
 
 const CTX: EngineContext = { now: '2026-01-01T00:00:00.000Z', engineVersion: 'test' }
 
@@ -175,5 +175,98 @@ describe('parseDraft', () => {
     const first = parseDraft(STANDARD, CTX, createIdSeed())
     const second = parseDraft(STANDARD, CTX, createIdSeed())
     expect(JSON.stringify(first.draft)).toBe(JSON.stringify(second.draft))
+  })
+})
+
+/**
+ * 真实简历里分区表头的写法。
+ * 每一项是「表头原文 → 应当归属的分区」。
+ */
+const HEADER_CORPUS: Array<[string, string]> = [
+  ['教育背景', 'education'], ['教育经历', 'education'], ['教育情况', 'education'],
+  ['学习经历', 'education'], ['学历背景', 'education'], ['教育', 'education'],
+  ['教育与培训', 'education'], ['Education', 'education'], ['Educational Background', 'education'],
+  ['工作经历', 'experience'], ['工作经验', 'experience'], ['工作履历', 'experience'],
+  ['职业经历', 'experience'], ['实习经历', 'experience'], ['任职经历', 'experience'],
+  ['工作', 'experience'], ['工作背景', 'experience'],
+  ['Work Experience', 'experience'], ['Professional Experience', 'experience'],
+  ['Experience', 'experience'], ['Career History', 'experience'],
+  ['项目经历', 'project'], ['项目经验', 'project'], ['项目实践', 'project'],
+  ['主要项目', 'project'], ['代表性项目', 'project'], ['项目', 'project'],
+  ['Projects', 'project'], ['Project Experience', 'project'], ['Selected Projects', 'project'],
+  ['专业技能', 'skills'], ['技术技能', 'skills'], ['核心技能', 'skills'],
+  ['技能特长', 'skills'], ['个人技能', 'skills'], ['技术栈', 'skills'],
+  ['IT技能', 'skills'], ['核心优势', 'skills'], ['个人能力', 'skills'],
+  ['专业能力', 'skills'], ['擅长技能', 'skills'],
+  ['Core Competencies', 'skills'], ['Core Skills', 'skills'],
+  ['Technical Skills', 'skills'], ['Skills', 'skills'], ['Skill Highlights', 'skills'],
+  ['一、教育背景', 'education'], ['1. 工作经历', 'experience'],
+  ['【项目经历】', 'project'], ['◆ 专业技能', 'skills'],
+  ['教育背景 Education', 'education'], ['工作经历 Experience', 'experience'],
+]
+
+describe('parseDraft 的分区表头识别', () => {
+  it('常见的同义、英文与带装饰的写法都能被认成分区表头', () => {
+    const missed: string[] = []
+    const wrong: string[] = []
+
+    for (const [header, expected] of HEADER_CORPUS) {
+      const result = parseDraft(`${header}\n占位内容\n`, CTX, createIdSeed())
+      // 置信度低于阈值说明一个表头都没认出来，走了启发式
+      if (result.confidence < LOW_CONFIDENCE_THRESHOLD) {
+        missed.push(header)
+        continue
+      }
+      const section = result.draft!.sections.find((candidate) => candidate.items.length > 0)
+      if (section && section.kind !== expected) wrong.push(`${header} → ${section.kind}`)
+    }
+
+    expect(missed).toEqual([])
+    expect(wrong).toEqual([])
+  })
+
+  it('要点不会被误判成分区表头', () => {
+    const bullets = [
+      '工作负责得很全面',
+      '项目经验丰富的求职者',
+      '技能熟练掌握 Vue 与 React',
+      '教育背景良好',
+      '工作十年以上经验',
+      '项目主导过三个大型系统',
+    ]
+    const eaten: string[] = []
+
+    for (const bullet of bullets) {
+      const result = parseDraft(
+        `工作经历\n美团 前端工程师 2021-03 - 至今\n${bullet}\n`,
+        CTX,
+        createIdSeed(),
+      )
+      const kept = result.draft!.sections
+        .flatMap((section) => section.items)
+        .flatMap((item) => item.bullets)
+        .map((entry) => entry.text)
+      if (!kept.includes(bullet)) eaten.push(bullet)
+    }
+
+    expect(eaten).toEqual([])
+  })
+
+  it('复合表头按第一个分区认', () => {
+    const result = parseDraft('工作经历与项目经历\n占位内容\n', CTX, createIdSeed())
+    const section = result.draft!.sections.find((candidate) => candidate.items.length > 0)
+    expect(section?.kind).toBe('experience')
+  })
+
+  it('关键词表里没有重复项，且短词不排在长词前面', () => {
+    for (const { keywords } of HEADER_KEYWORDS) {
+      const normalized = keywords.map((keyword) => keyword.replace(/[\s：:，,。.、]/g, ''))
+      expect(new Set(normalized).size).toBe(normalized.length)
+      for (let i = 0; i < normalized.length; i += 1) {
+        for (let j = i + 1; j < normalized.length; j += 1) {
+          expect(normalized[j].startsWith(normalized[i])).toBe(false)
+        }
+      }
+    }
   })
 })

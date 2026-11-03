@@ -187,3 +187,66 @@ describe('rangesOverlap', () => {
     ).toBe(false)
   })
 })
+
+describe('只有年份与英文月份的写法', () => {
+  it('读出只有年份的区间', () => {
+    expect(extractDateRange('2019 - 2022')).toEqual({
+      start: '2019-01',
+      end: '2022-12',
+      present: false,
+    })
+  })
+
+  it('读出用全角波浪号连接的年份区间', () => {
+    expect(extractDateRange('2019～2022')).toEqual({
+      start: '2019-01',
+      end: '2022-12',
+      present: false,
+    })
+  })
+
+  it('读出英文月份写的区间', () => {
+    expect(extractDateRange('Mar 2021 - Jun 2022')).toEqual({
+      start: '2021-03',
+      end: '2022-06',
+      present: false,
+    })
+  })
+
+  it('英文月份后接至今', () => {
+    expect(extractDateRange('Mar 2021 - Present')).toEqual({
+      start: '2021-03',
+      end: null,
+      present: true,
+    })
+  })
+
+  it('带月份写法的区间不被当成只有年份', () => {
+    expect(extractDateRange('2019-06 - 2022-08')).toEqual({
+      start: '2019-06',
+      end: '2022-08',
+      present: false,
+    })
+  })
+
+  it('报出只有年份的区间在行内的位置', () => {
+    const line = '美团 前端工程师 2019 - 2022'
+    const span = findDateSpan(line)
+    expect(span).not.toBeNull()
+    expect(line.slice(span!.start, span!.end)).toBe('2019 - 2022')
+    expect(span!.range.start).toBe('2019-01')
+    expect(span!.range.end).toBe('2022-12')
+  })
+})
+
+describe('不该被当成日期的写法', () => {
+  it('手机号不会被当成只有年份的区间', () => {
+    expect(extractDateRange('138-0000-0000')).toBeNull()
+    expect(findDateSpan('138-0000-0000')).toBeNull()
+  })
+
+  it('年份超出合理区间的写法不算日期', () => {
+    expect(extractDateRange('0000 - 0000')).toBeNull()
+    expect(extractDateRange('9999 - 9999')).toBeNull()
+  })
+})
