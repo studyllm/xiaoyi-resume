@@ -73,7 +73,7 @@ watch(() => route.query.redirect, openFromQuery)
 const features = [
   {
     title: '一份结构化简历',
-    body: '教育、经历、项目、技能四个分区，要点带稳定标识，诊断意见和版本改动都锚定到具体句子。',
+    body: '教育、经历、项目、技能与其它五个分区，要点带稳定标识，诊断意见和版本改动都锚定到具体句子。',
   },
   {
     title: '只看简历的诊断',

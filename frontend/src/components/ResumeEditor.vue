@@ -8,7 +8,7 @@ import { collectDraftIds, resumeIdSeed } from '@/domain/ids'
 import { SECTION_FIELD_WORDS } from '@/domain/sectionFields'
 import { anchorText } from '@/engines/anchor'
 import { addSkillRow, applyOp, isEmptyItem } from '@/engines/editing'
-import type { DiagnosisIssue, Draft, DraftProfile, SectionKind } from '@/domain/types'
+import { hasItemHead, type DiagnosisIssue, type Draft, type DraftProfile, type SectionKind } from '@/domain/types'
 
 /** 外部让编辑器定位到某个地方。 */
 export type EditorFocusTarget =
@@ -113,6 +113,7 @@ const SECTION_ADD_LABELS: Record<SectionKind, string> = {
   experience: '新增一段工作经历',
   project: '新增一个项目',
   skills: '新增一条技能',
+  other: '新增一条',
 }
 
 function fieldLabel(section: SectionKind, key: 'org' | 'title'): string {
@@ -149,7 +150,7 @@ function editBullet(sectionId: string, itemId: string, bulletId: string, event: 
 
 /** 新增一个条目；专业技能分区没有条目层，落在要点上。 */
 async function addEntry(section: SectionKind, sectionId: string): Promise<void> {
-  if (section === 'skills') {
+  if (!hasItemHead(section)) {
     const bulletId = seed.value.next('bullet')
     const itemId = seed.value.next('item')
     commit(addSkillRow(localDraft.value, { sectionId, itemId, bulletId }))
@@ -542,7 +543,7 @@ watch(
       </template>
 
       <template #item-delete="{ section, item }">
-        <span v-if="editable && section.kind !== 'skills'" class="paper-action">
+        <span v-if="editable && hasItemHead(section.kind)" class="paper-action">
           <el-button
             v-if="confirmingDelete !== item.id"
             size="small"
@@ -610,7 +611,7 @@ watch(
 
       <template #item-add="{ section, item }">
         <button
-          v-if="editable && section.kind !== 'skills'"
+          v-if="editable && hasItemHead(section.kind)"
           type="button"
           class="paper-add paper-add--nested"
           @click="addBulletToItem(section.id, item.id)"

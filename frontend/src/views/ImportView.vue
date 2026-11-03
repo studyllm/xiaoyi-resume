@@ -26,6 +26,8 @@ const extracting = ref(false)
 const confidence = ref<number | null>(null)
 const warnings = ref<string[]>([])
 const failure = ref<string | null>(null)
+/** 疑似分区表头但没被认出来的行——它们的内容被并进了上一个分区。 */
+const otherHeaders = ref<string[]>([])
 /** 解析当时查出的结构问题。用户在纸上改的时候它不动，保存时重算。 */
 const structureIssues = ref<StructureFinding[]>([])
 /** 粘贴输入框。PDF 没有文字层时要把焦点交回去。 */
@@ -59,6 +61,7 @@ function parse(extraWarnings: string[] = []): boolean {
     // 额外的警告要留着——上传来的文字可能很少，用户更需要知道这一点
     warnings.value = [...extraWarnings]
     structureIssues.value = []
+    otherHeaders.value = []
     failure.value = result.failure?.message ?? '解析失败'
     ElMessage.error(failure.value)
     return false
@@ -66,6 +69,7 @@ function parse(extraWarnings: string[] = []): boolean {
 
   confidence.value = result.confidence
   warnings.value = [...extraWarnings, ...result.warnings]
+  otherHeaders.value = result.otherHeaders
   // 与编辑页同一口径：只列缺字段、时间对不上这类要紧的。
   // 「某个分区是空的」由解析器自己的警告说明。
   structureIssues.value = findStructureFindings(draftStore.pending!).filter(
@@ -244,6 +248,20 @@ function loadDemo(): void {
       :closable="false"
       :title="failure"
     />
+
+    <el-alert
+      v-if="otherHeaders.length > 0"
+      class="card-block"
+      type="warning"
+      show-icon
+      :closable="false"
+      :title="`这份简历有 ${otherHeaders.length} 段我们不确定属于哪个分区，放在「其它」里了`"
+      description="下面这几段没能归到教育、经历、项目、技能任何一个分区。可以在纸上直接改。"
+    >
+      <ul class="issue-list">
+        <li v-for="line in otherHeaders" :key="line">{{ line }}</li>
+      </ul>
+    </el-alert>
 
     <el-alert
       v-if="lowConfidence"
