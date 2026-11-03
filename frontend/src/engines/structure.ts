@@ -1,5 +1,5 @@
 import type { Draft, SectionKind, Severity } from '@/domain/types'
-import { SECTION_ORDER } from '@/domain/types'
+import { hasItemHead, SECTION_ORDER } from '@/domain/types'
 import { SECTION_FIELD_WORDS } from '@/domain/sectionFields'
 import { compareYearMonth, rangesOverlap } from '@/domain/time'
 
@@ -125,7 +125,8 @@ export function findStructureFindings(draft: Draft): StructureFinding[] {
     const section = draft.sections.find((candidate) => candidate.kind === kind)
     if (!section) return
 
-    if (section.items.length === 0) {
+    // 「其它」是可选的，空着不算问题
+    if (section.items.length === 0 && kind !== 'other') {
       findings.push({
         ruleId: 'empty-section',
         category: 'structure',
@@ -149,7 +150,7 @@ export function findStructureFindings(draft: Draft): StructureFinding[] {
     section.items.forEach((item, itemIndex) => {
       const label = itemLabel(item.org, item.title)
 
-      if (kind !== 'skills') {
+      if (hasItemHead(kind)) {
         if (!item.org) {
           findings.push({
             ruleId: 'missing-org',
@@ -210,7 +211,7 @@ export function findStructureFindings(draft: Draft): StructureFinding[] {
         })
       }
 
-      if (kind !== 'skills') {
+      if (hasItemHead(kind)) {
         if (!item.start) {
           findings.push({
             ruleId: 'missing-start',
@@ -251,7 +252,7 @@ export function findStructureFindings(draft: Draft): StructureFinding[] {
       }
     })
 
-    if (kind !== 'skills') {
+    if (hasItemHead(kind)) {
       collectTimelineFindings(section, kind, sectionIndex, findings)
     }
   })

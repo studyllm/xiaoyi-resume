@@ -37,7 +37,7 @@ export interface MigrationStep {
   migrate(value: unknown): unknown
 }
 
-const SECTION_KINDS: SectionKind[] = ['education', 'experience', 'project', 'skills']
+const SECTION_KINDS: SectionKind[] = ['education', 'experience', 'project', 'skills', 'other']
 
 function toSectionKind(value: string | undefined): SectionKind {
   return SECTION_KINDS.includes(value as SectionKind) ? (value as SectionKind) : 'experience'

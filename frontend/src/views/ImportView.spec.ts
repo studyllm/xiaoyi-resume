@@ -275,3 +275,39 @@ describe('ImportView 的上传路径', () => {
     expect(wrapper.text()).not.toContain('暂不支持 PDF 解析')
   })
 })
+
+describe('ImportView 的「其它」提示', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('进了「其它」的内容给出提示并列出是哪几段', async () => {
+    const { wrapper } = await mountImporter()
+    await parse(
+      wrapper,
+      `工作经历
+美团 前端工程师 2021-03 - 至今
+自我评价
+· 团队协作良好，认真负责
+获奖经历
+· 年度技术突破奖
+`,
+    )
+
+    const alert = wrapper
+      .findAll('.el-alert')
+      .find((node) => node.text().includes('放在「其它」里了'))
+    expect(alert).toBeDefined()
+    expect(alert!.text()).toContain('2 段')
+    expect(alert!.text()).toContain('自我评价')
+    expect(alert!.text()).toContain('获奖经历')
+  })
+
+  it('全部归到主分区时不出现这条提示', async () => {
+    const { wrapper } = await mountImporter()
+    await parse(wrapper, RESUME)
+
+    const alerts = wrapper.findAll('.el-alert').map((node: { text: () => string }) => node.text())
+    expect(alerts.some((text) => text.includes('放在「其它」里了'))).toBe(false)
+  })
+})

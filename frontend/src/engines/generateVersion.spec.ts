@@ -450,3 +450,30 @@ describe('generateVersion', () => {
     expect(version.body).toContain('门店物料管理系统')
   })
 })
+
+describe('「其它」分区的版本产出', () => {
+  it('底稿里没有「其它」时，版本里也不产出这个分区', () => {
+    const draft = makeDraft({
+      experience: [{ id: 'exp-1', org: '美团', title: '前端工程师', bullets: ['负责页面开发'] }],
+    })
+    // 模拟旧底稿：只有四个分区，没有「其它」
+    const withoutOther = { ...draft, sections: draft.sections.filter((section) => section.kind !== 'other') }
+
+    const { version } = generateVersion(withoutOther, JD, CTX)
+
+    expect(version.sections.some((section) => section.kind === 'other')).toBe(false)
+  })
+
+  it('底稿的「其它」有内容时，版本里带上它', () => {
+    const draft = makeDraft({
+      experience: [{ id: 'exp-1', org: '美团', title: '前端工程师', bullets: ['负责页面开发'] }],
+      other: [{ id: 'other-1', bullets: ['团队协作良好，认真负责'] }],
+    })
+
+    const { version } = generateVersion(draft, JD, CTX)
+
+    const other = version.sections.find((section) => section.kind === 'other')
+    expect(other).toBeDefined()
+    expect(other!.items.length).toBeGreaterThan(0)
+  })
+})

@@ -19,4 +19,5 @@ export const SECTION_FIELD_WORDS: Record<SectionKind, SectionFieldWords> = {
   experience: { org: '公司名称', title: '职位', itemNoun: '这段经历' },
   project: { org: '项目名称', title: '角色', itemNoun: '这个项目' },
   skills: { org: '', title: '', itemNoun: '这条技能' },
+  other: { org: '', title: '', itemNoun: '这一条' },
 }

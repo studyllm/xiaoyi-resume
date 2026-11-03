@@ -1,14 +1,30 @@
 import type { YearMonth } from './time'
 
-export type SectionKind = 'education' | 'experience' | 'project' | 'skills'
+export type SectionKind = 'education' | 'experience' | 'project' | 'skills' | 'other'
 
-export const SECTION_ORDER: SectionKind[] = ['education', 'experience', 'project', 'skills']
+export const SECTION_ORDER: SectionKind[] = ['education', 'experience', 'project', 'skills', 'other']
+
+/**
+ * 必须填齐的分区。解析置信度只看这几个——「其它」是可选的，填不满不算问题。
+ */
+export const REQUIRED_SECTION_KINDS: SectionKind[] = ['education', 'experience', 'project', 'skills']
+
+/**
+ * 这些分区在结构上没有条目头——它们整个分区就是一行行内容。
+ * 专业技能是技能行，「其它」是自我评价、获奖经历这类内容。
+ */
+export const SECTIONS_WITHOUT_ITEM_HEAD: SectionKind[] = ['skills', 'other']
+
+export function hasItemHead(kind: SectionKind): boolean {
+  return !SECTIONS_WITHOUT_ITEM_HEAD.includes(kind)
+}
 
 export const SECTION_TITLES: Record<SectionKind, string> = {
   education: '教育背景',
   experience: '工作经历',
   project: '项目经历',
   skills: '专业技能',
+  other: '其它',
 }
 
 export interface Bullet {

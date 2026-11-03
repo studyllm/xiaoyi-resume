@@ -1,7 +1,7 @@
 import type { IdSeed } from '@/domain/ids'
 import { findDateSpan } from '@/domain/time'
 import type { Bullet, Draft, DraftItem, DraftSection, SectionKind } from '@/domain/types'
-import { SECTION_ORDER, SECTION_TITLES } from '@/domain/types'
+import { REQUIRED_SECTION_KINDS, SECTION_ORDER, SECTION_TITLES } from '@/domain/types'
 import { matchCatalog } from './catalog'
 import { extractProfile } from './profile'
 import type { EngineContext, ParseResult } from './types'
@@ -44,6 +44,16 @@ export const HEADER_KEYWORDS: Array<{ kind: SectionKind; keywords: string[] }> =
       '核心优势', '个人能力', '专业能力', '擅长技能', '技能',
       'Technical Skills', 'Core Competencies', 'Skill Highlights', 'Technical Stack',
       'Qualifications', 'Core Skills', 'Skills',
+    ],
+  },
+  {
+    kind: 'other',
+    keywords: [
+      '自我评价', '获奖经历', '荣誉奖项', '荣誉', '证书', '语言能力', '社团经历',
+      '志愿服务', '个人评价', '实习项目', '校园经历', '专业认证', '培训经历',
+      '获奖情况', '所获荣誉', '个人特长', '兴趣爱好',
+      'Personal Summary', 'Self Evaluation', 'Awards', 'Certificates', 'Profile',
+      'Publications', 'Volunteer Experience', 'Interests', 'Activities',
     ],
   },
 ]
@@ -173,25 +183,30 @@ function buildSections(
   seed: IdSeed,
   buckets: Record<SectionKind, SectionBucket>,
 ): DraftSection[] {
-  return SECTION_ORDER.map((kind) => ({
-    id: seed.next('section'),
-    kind,
-    title: SECTION_TITLES[kind],
-    items: buckets[kind].items,
-  }))
+  return SECTION_ORDER.filter((kind) => kind !== 'other' || buckets[kind].items.length > 0).map(
+    (kind) => ({
+      id: seed.next('section'),
+      kind,
+      title: SECTION_TITLES[kind],
+      items: buckets[kind].items,
+    }),
+  )
 }
 
 function parseStructured(
   lines: string[],
   seed: IdSeed,
-): { buckets: Record<SectionKind, SectionBucket>; warnings: string[] } {
+): { buckets: Record<SectionKind, SectionBucket>; warnings: string[]; otherHeaders: string[] } {
   const buckets: Record<SectionKind, SectionBucket> = {
     education: { items: [] },
     experience: { items: [] },
     project: { items: [] },
     skills: { items: [] },
+    other: { items: [] },
   }
   const warnings: string[] = []
+  /** 引导「其它」分区的那些表头——用户要知道哪几段被放进了「其它」。 */
+  const otherHeaders: string[] = []
 
   let currentKind: SectionKind | null = null
   let currentItem: DraftItem | null = null
@@ -201,20 +216,22 @@ function parseStructured(
     if (kind) {
       currentKind = kind
       currentItem = null
+      if (kind === 'other') otherHeaders.push(line)
       continue
     }
     if (!currentKind) continue
 
-    if (currentKind === 'skills') {
+    // 专业技能与「其它」在结构上没有条目头，整个分区就是一行行内容
+    if (currentKind === 'skills' || currentKind === 'other') {
       const bullet = stripBulletMarker(line)
       const text = bullet ?? line.trim()
       if (!text) continue
-      let skillsItem = buckets.skills.items[0]
-      if (!skillsItem) {
-        skillsItem = makeItem(seed)
-        buckets.skills.items.push(skillsItem)
+      let flatItem = buckets[currentKind].items[0]
+      if (!flatItem) {
+        flatItem = makeItem(seed)
+        buckets[currentKind].items.push(flatItem)
       }
-      skillsItem.bullets.push(makeBullet(text, seed))
+      flatItem.bullets.push(makeBullet(text, seed))
       continue
     }
 
@@ -251,23 +268,26 @@ function parseStructured(
   }
 
   for (const kind of SECTION_ORDER) {
+    // 「其它」是可选的，空着不算问题
+    if (kind === 'other') continue
     if (buckets[kind].items.length === 0) {
       warnings.push(`「${SECTION_TITLES[kind]}」分区没有识别到内容`)
     }
   }
 
-  return { buckets, warnings }
+  return { buckets, warnings, otherHeaders }
 }
 
 function parseHeuristic(
   lines: string[],
   seed: IdSeed,
-): { buckets: Record<SectionKind, SectionBucket>; warnings: string[] } {
+): { buckets: Record<SectionKind, SectionBucket>; warnings: string[]; otherHeaders: string[] } {
   const buckets: Record<SectionKind, SectionBucket> = {
     education: { items: [] },
     experience: { items: [] },
     project: { items: [] },
     skills: { items: [] },
+    other: { items: [] },
   }
 
   let currentItem: DraftItem | null = null
@@ -323,6 +343,7 @@ function parseHeuristic(
   return {
     buckets,
     warnings: ['未识别到分区表头，已按启发式推断分区，建议在保存前确认结构'],
+    otherHeaders: [],
   }
 }
 
@@ -344,6 +365,7 @@ export function parseDraft(rawText: string, _ctx: EngineContext, seed: IdSeed): 
       draft: null,
       confidence: 0,
       warnings: [],
+      otherHeaders: [],
       failure: { reason: 'empty', message: '需要简历正文才能解析' },
     }
   }
@@ -357,9 +379,9 @@ export function parseDraft(rawText: string, _ctx: EngineContext, seed: IdSeed): 
   const hasHeader = firstHeaderIndex !== -1
   const profile = extractProfile(hasHeader ? lines.slice(0, firstHeaderIndex) : [])
 
-  const { buckets, warnings } = hasHeader
+  const { buckets, warnings, otherHeaders } = hasHeader
     ? parseStructured(lines, seed)
-    : parseHeuristic(lines, seed)
+    : { ...parseHeuristic(lines, seed), otherHeaders: [] }
 
   if (countContent(buckets) === 0) {
     return {
@@ -367,13 +389,15 @@ export function parseDraft(rawText: string, _ctx: EngineContext, seed: IdSeed): 
       draft: null,
       confidence: 0,
       warnings: [],
+      otherHeaders: [],
       failure: { reason: 'unrecognized', message: '未能从这段文字中识别出简历结构' },
     }
   }
 
   const sections = buildSections(seed, buckets)
-  const filled = SECTION_ORDER.filter((kind) => buckets[kind].items.length > 0).length
-  const confidence = hasHeader ? (filled === SECTION_ORDER.length ? 1 : 0.9) : 0.4
+  // 置信度只看必填分区——「其它」填不满不算问题
+  const filled = REQUIRED_SECTION_KINDS.filter((kind) => buckets[kind].items.length > 0).length
+  const confidence = hasHeader ? (filled === REQUIRED_SECTION_KINDS.length ? 1 : 0.9) : 0.4
 
   const draft: Draft = {
     id: seed.next('draft'),
@@ -384,5 +408,5 @@ export function parseDraft(rawText: string, _ctx: EngineContext, seed: IdSeed): 
     updatedAt: '',
   }
 
-  return { ok: true, draft, confidence, warnings, failure: null }
+  return { ok: true, draft, confidence, warnings, otherHeaders, failure: null }
 }

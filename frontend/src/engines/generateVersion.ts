@@ -158,6 +158,9 @@ export function generateVersion(
   const diffEntries: DiffEntry[] = []
 
   for (const kind of SECTION_ORDER) {
+    // 底稿里没有这个分区就不生成——否则老版本会多出一个空的「其它」
+    if (!draft.sections.some((section) => section.kind === kind)) continue
+
     const versionItems: VersionItem[] = []
 
     for (const entry of current.filter((item) => item.section.kind === kind)) {

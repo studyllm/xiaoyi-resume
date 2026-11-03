@@ -27,6 +27,13 @@ export interface ParseResult {
   draft: Draft | null
   confidence: number
   warnings: string[]
+  /**
+   * 被放进「其它」分区的那些表头。
+   *
+   * 它们不对应教育、经历、项目、技能任何一个分区，内容被收进了「其它」。
+   * 用户需要知道是哪几段被这样归置的。
+   */
+  otherHeaders: string[]
   failure: ParseFailure | null
 }
 
