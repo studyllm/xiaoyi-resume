@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { Delete } from '@element-plus/icons-vue'
 
 import PaperField from '@/components/PaperField.vue'
 import ResumePreview, { type PreviewHighlight } from '@/components/ResumePreview.vue'
@@ -100,13 +99,6 @@ const pendingFocus = ref<{ kind: 'item' | 'bullet'; id: string } | null>(null)
 const confirmingDelete = ref<string | null>(null)
 /** 展开了的批注。 */
 const expandedCommentIds = ref<string[]>([])
-
-function dateRange(item: { start?: string | null; end?: string | null; present?: boolean }): string {
-  if (!item.start) return ''
-  if (item.present) return `${item.start} - 至今`
-  if (item.end) return `${item.start} - ${item.end}`
-  return item.start
-}
 
 const SECTION_ADD_LABELS: Record<SectionKind, string> = {
   education: '新增一段教育经历',
@@ -291,16 +283,21 @@ function updateProfile(patch: Partial<DraftProfile>): void {
   commit(applyOp(localDraft.value, { type: 'set-profile', patch }))
 }
 
+/** 条目的起止时间或「至今」改了。 */
+function onItemDatesUpdate(
+  sectionId: string,
+  itemId: string,
+  patch: { start?: string | null; end?: string | null; present?: boolean },
+): void {
+  updateItemMeta(sectionId, itemId, patch)
+}
+
 function updateItemMeta(
   sectionId: string,
   itemId: string,
   patch: { org?: string; title?: string; start?: string | null; end?: string | null; present?: boolean },
 ): void {
   commit(applyOp(localDraft.value, { type: 'set-item-meta', sectionId, itemId, patch }))
-}
-
-function updatePresent(sectionId: string, itemId: string, value: unknown): void {
-  updateItemMeta(sectionId, itemId, { present: Boolean(value) })
 }
 
 function addContact(): void {
@@ -314,6 +311,23 @@ function removeContact(index: number): void {
 /** 联系方式的删除目标，与条目、要点分开。 */
 function contactKey(index: number): string {
   return `contact-${index}`
+}
+
+/** 联系方式的标签与内容改了。 */
+function onContactUpdate(index: number, patch: { label?: string; value?: string }): void {
+  setContact(index, patch)
+}
+
+/** 正在确认删除的是第几个联系方式——-1 表示没有。 */
+const confirmingContactIndex = computed(() => {
+  const key = confirmingDelete.value
+  if (!key || !key.startsWith('contact-')) return -1
+  return Number(key.slice('contact-'.length))
+})
+
+/** 点了联系方式后面的垃圾桶——先进入确认态。 */
+function requestContactDelete(index: number): void {
+  requestDelete(contactKey(index))
 }
 
 function confirmDeleteContact(index: number): void {
@@ -349,19 +363,6 @@ function toggleBulletComments(bulletId: string): void {
     if (expanded) expandedCommentIds.value = expandedCommentIds.value.filter((entry) => entry !== id)
     else expandedCommentIds.value = [...expandedCommentIds.value, id]
   }
-}
-
-/** 收起时给的那行摘要：说的是问题本身，不是被批的那句话。 */
-function bulletStripSummary(bulletId: string): string {
-  const issues = bulletIssues.value.get(bulletId) ?? []
-  if (issues.length === 0) return ''
-  return issues[0]!.problem
-}
-
-function severityOf(issues: DiagnosisIssue[]): 'high' | 'medium' | 'low' {
-  if (issues.some((issue) => issue.severity === 'high')) return 'high'
-  if (issues.some((issue) => issue.severity === 'medium')) return 'medium'
-  return 'low'
 }
 
 /** 定位指令对应纸面上的哪个元素。 */
@@ -437,43 +438,15 @@ watch(
       </template>
 
       <template #profile-contacts="{ profile }">
-        <span v-if="!editable" class="paper-contacts-text">
-          {{ profile.contacts.map((contact) => contact.value).join(' · ') }}
-        </span>
-        <template v-else>
-          <span v-for="(contact, index) in profile.contacts" :key="index" class="paper-contact">
-            <el-input
-              :model-value="contact.label"
-              borderless
-              class="paper-input paper-input--label"
-              placeholder="标签"
-              @update:model-value="(value: string) => setContact(index, { label: value })"
-            />
-            <el-input
-              :model-value="contact.value"
-              borderless
-              class="paper-input"
-              placeholder="内容"
-              @update:model-value="(value: string) => setContact(index, { value })"
-            />
-            <el-button
-              v-if="confirmingDelete !== contactKey(index)"
-              size="small"
-              text
-              :icon="Delete"
-              class="paper-delete"
-              title="删除这个联系方式"
-              aria-label="删除这个联系方式"
-              @click="requestDelete(contactKey(index))"
-            />
-            <template v-else>
-              <el-button size="small" text type="danger" @click="confirmDeleteContact(index)">
-                确认删除？
-              </el-button>
-              <el-button size="small" text @click="cancelDelete">取消</el-button>
-            </template>
-          </span>
-        </template>
+        <ContactList
+          :contacts="profile.contacts"
+          :editable="editable"
+          :confirming-index="confirmingContactIndex"
+          @update="onContactUpdate"
+          @request-delete="requestContactDelete"
+          @confirm-delete="confirmDeleteContact"
+          @cancel-delete="cancelDelete"
+        />
       </template>
 
       <template #profile-add>
@@ -503,64 +476,24 @@ watch(
       </template>
 
       <template #item-dates="{ section, item }">
-        <span v-if="!editable" class="paper-dates-text">{{ dateRange(item) }}</span>
-        <template v-else>
-          <!-- 日期选择器的根是 Fragment，拿不到 scoped 属性，用一层带 scope 的元素承接样式 -->
-          <span class="paper-date-field">
-            <el-date-picker
-              :model-value="item.start ?? undefined"
-              type="month"
-              value-format="YYYY-MM"
-              placeholder="开始年月"
-              @update:model-value="
-                (value: string | null) => updateItemMeta(section.id, item.id, { start: value })
-              "
-            />
-          </span>
-          <span class="paper-date-sep">–</span>
-          <span class="paper-date-field">
-            <el-date-picker
-              :model-value="item.end ?? undefined"
-              type="month"
-              value-format="YYYY-MM"
-              placeholder="结束年月"
-              :disabled="item.present"
-              @update:model-value="
-                (value: string | null) => updateItemMeta(section.id, item.id, { end: value })
-              "
-            />
-          </span>
-          <el-checkbox
-            :model-value="item.present ?? false"
-            class="paper-present"
-            @update:model-value="
-              (value: string | number | boolean) => updatePresent(section.id, item.id, value)
-            "
-          >
-            至今
-          </el-checkbox>
-        </template>
+        <ItemDates
+          :start="item.start"
+          :end="item.end"
+          :present="item.present"
+          :editable="editable"
+          @update="(patch) => onItemDatesUpdate(section.id, item.id, patch)"
+        />
       </template>
 
       <template #item-delete="{ section, item }">
-        <span v-if="editable && hasItemHead(section.kind)" class="paper-action">
-          <el-button
-            v-if="confirmingDelete !== item.id"
-            size="small"
-            text
-            :icon="Delete"
-            class="paper-delete"
-            :title="`删除${itemNoun(section.kind)}`"
-            :aria-label="`删除${itemNoun(section.kind)}`"
-            @click="requestDelete(item.id)"
-          />
-          <template v-else>
-            <el-button size="small" text type="danger" @click="confirmDelete(section.id, item.id)">
-              确认删除？
-            </el-button>
-            <el-button size="small" text @click="cancelDelete">取消</el-button>
-          </template>
-        </span>
+        <DeleteButton
+          v-if="editable && hasItemHead(section.kind)"
+          :confirming="confirmingDelete === item.id"
+          :delete-title="`删除${itemNoun(section.kind)}`"
+          @request="requestDelete(item.id)"
+          @confirm="confirmDelete(section.id, item.id)"
+          @cancel="cancelDelete"
+        />
       </template>
 
       <template #bullet="{ section, item, bullet }">
@@ -589,24 +522,14 @@ watch(
       </template>
 
       <template #bullet-delete="{ section, item, bullet }">
-        <span v-if="editable" class="paper-action">
-          <el-button
-            v-if="confirmingDelete !== bullet.id"
-            size="small"
-            text
-            :icon="Delete"
-            class="paper-delete"
-            :title="section.kind === 'skills' ? '删除这条技能' : '删除这条要点'"
-            :aria-label="section.kind === 'skills' ? '删除这条技能' : '删除这条要点'"
-            @click="requestDelete(bullet.id)"
-          />
-          <template v-else>
-            <el-button size="small" text type="danger" @click="confirmDelete(section.id, item.id, bullet.id)">
-              确认删除？
-            </el-button>
-            <el-button size="small" text @click="cancelDelete">取消</el-button>
-          </template>
-        </span>
+        <DeleteButton
+          v-if="editable"
+          :confirming="confirmingDelete === bullet.id"
+          :delete-title="section.kind === 'skills' ? '删除这条技能' : '删除这条要点'"
+          @request="requestDelete(bullet.id)"
+          @confirm="confirmDelete(section.id, item.id, bullet.id)"
+          @cancel="cancelDelete"
+        />
       </template>
 
       <template #item-add="{ section, item }">
@@ -621,41 +544,13 @@ watch(
       </template>
 
       <template #bullet-extra="{ bullet }">
-        <div
+        <BulletComments
           v-if="editable && (bulletIssues.get(bullet.id) ?? []).length > 0"
-          class="paper-comment"
-        >
-          <button
-            type="button"
-            class="comment-strip"
-            :class="`comment-strip--${severityOf(bulletIssues.get(bullet.id) ?? [])}`"
-            @click="toggleBulletComments(bullet.id)"
-          >
-            <span class="comment-strip-count">
-              {{ bulletIssues.get(bullet.id)!.length }} 条批注
-            </span>
-            <span class="comment-strip-summary" v-show="!bulletCommentsExpanded(bullet.id)">
-              {{ bulletStripSummary(bullet.id) }}
-            </span>
-            <span class="comment-strip-toggle">
-              {{ bulletCommentsExpanded(bullet.id) ? '收起' : '展开' }}
-            </span>
-          </button>
-
-          <ul v-if="bulletCommentsExpanded(bullet.id)" class="comment-inline">
-            <li
-              v-for="issue in bulletIssues.get(bullet.id) ?? []"
-              :id="`paper-comment-${issue.id}`"
-              :key="issue.id"
-              class="comment-inline-row"
-              :class="`comment-inline-row--${issue.severity}`"
-              @click="revealComment(issue)"
-            >
-              <span class="comment-inline-text">{{ issue.problem }}</span>
-              <span class="comment-inline-suggestion">{{ issue.suggestion }}</span>
-            </li>
-          </ul>
-        </div>
+          :issues="bulletIssues.get(bullet.id) ?? []"
+          :expanded="bulletCommentsExpanded(bullet.id)"
+          @toggle="toggleBulletComments(bullet.id)"
+          @select="revealComment"
+        />
       </template>
 
       <template #section-add="{ section }">

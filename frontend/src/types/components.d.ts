@@ -8,7 +8,11 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     BrandLogo: typeof import('./../components/BrandLogo.vue')['default']
+    BulletComments: typeof import('./../components/BulletComments.vue')['default']
+    CollapsedSidebar: typeof import('./../components/CollapsedSidebar.vue')['default']
     CommentSidebar: typeof import('./../components/CommentSidebar.vue')['default']
+    ContactList: typeof import('./../components/ContactList.vue')['default']
+    DeleteButton: typeof import('./../components/DeleteButton.vue')['default']
     DiagnosisComment: typeof import('./../components/DiagnosisComment.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
@@ -53,11 +57,15 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElUpload: typeof import('element-plus/es')['ElUpload']
     IdentityDialog: typeof import('./../components/IdentityDialog.vue')['default']
+    ItemDates: typeof import('./../components/ItemDates.vue')['default']
     PaperField: typeof import('./../components/PaperField.vue')['default']
     ResumeEditor: typeof import('./../components/ResumeEditor.vue')['default']
     ResumePreview: typeof import('./../components/ResumePreview.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SidebarEmpty: typeof import('./../components/SidebarEmpty.vue')['default']
+    SidebarFilters: typeof import('./../components/SidebarFilters.vue')['default']
+    StructureFindingsPanel: typeof import('./../components/StructureFindingsPanel.vue')['default']
     UnsavedChangesDialog: typeof import('./../components/UnsavedChangesDialog.vue')['default']
   }
 }

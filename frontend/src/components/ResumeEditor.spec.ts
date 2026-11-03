@@ -95,6 +95,24 @@ function buttonByText(wrapper: ReturnType<typeof mountEditor>, text: string) {
   return found
 }
 
+/**
+ * 纸面样式的全部来源。
+ *
+ * 拆分之后，联系���、日期、行内批注这几块的样式跟着各自的组件走了——父组件的
+ * 样式文件里只剩 `:deep()` 形式的跨组件规则。断言要看的是「这些规则还在
+ * 不在」，所以把两边都读进来。
+ */
+function editorStyles(): string {
+  const files = [
+    'src/components/resume-editor.css',
+    'src/components/ContactList.vue',
+    'src/components/ItemDates.vue',
+    'src/components/BulletComments.vue',
+    'src/components/DeleteButton.vue',
+  ]
+  return files.map((file) => readFileSync(join(process.cwd(), file), 'utf8')).join('\n')
+}
+
 describe('ResumeEditor', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
@@ -450,7 +468,7 @@ describe('ResumeEditor', () => {
   })
 
   it('tells on the paper where the editable parts are', () => {
-    const source = readFileSync(join(process.cwd(), 'src/components/resume-editor.css'), 'utf8')
+    const source = editorStyles()
     // 可编辑的块：一层极淡的底色
     expect(source).toContain('.resume-editor.is-editable :deep(.paper-item-head)')
     expect(source).toContain('.resume-editor.is-editable :deep(.paper-bullets li)')
@@ -473,7 +491,7 @@ describe('ResumeEditor', () => {
   })
 
   it('keeps the comment strip inside the width of the bullet', () => {
-    const source = readFileSync(join(process.cwd(), 'src/components/resume-editor.css'), 'utf8')
+    const source = editorStyles()
     // 左边缩进 14px，宽度要跟着减，不然「展开」会挂到版心外面
     expect(source).toContain('width: calc(100% - 14px)')
   })
@@ -493,21 +511,21 @@ describe('ResumeEditor', () => {
   })
 
   it('lines the nested add button up with the bullet text', () => {
-    const source = readFileSync(join(process.cwd(), 'src/components/resume-editor.css'), 'utf8')
+    const source = editorStyles()
     // 9mm = 要点的缩进（ul 5mm + li 4mm）
     expect(source).toContain('width: calc(100% - 9mm)')
     expect(source).toContain('margin-left: 9mm')
   })
 
   it('lets a contact value use the rest of the line', () => {
-    const source = readFileSync(join(process.cwd(), 'src/components/resume-editor.css'), 'utf8')
+    const source = editorStyles()
     expect(source).toContain('.paper-contact .paper-input:not(.paper-input--label)')
     expect(source).toContain('flex: 1 1 auto')
     expect(source).not.toContain('width: 190px')
   })
 
   it('lights up only the hovered row of the header', () => {
-    const source = readFileSync(join(process.cwd(), 'src/components/resume-editor.css'), 'utf8')
+    const source = editorStyles()
     // 抬头装着四行，hover 不能挂在整块上
     expect(source).not.toContain(':deep(.paper-header:hover)')
     expect(source).toContain(':deep(.paper-name:hover)')
