@@ -27,6 +27,13 @@ export interface ParseResult {
   draft: Draft | null
   confidence: number
   warnings: string[]
+  /**
+   * 疑似分区表头但没被认出来的行。
+   *
+   * 这些行的内容被并进了上一个分区——用户看到的是「少了一段」，但界面上
+   * 没有任何提示说「这里我们没认出来」。
+   */
+  suspectedHeaders: string[]
   failure: ParseFailure | null
 }
 

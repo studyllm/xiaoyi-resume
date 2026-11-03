@@ -275,3 +275,34 @@ describe('ImportView 的上传路径', () => {
     expect(wrapper.text()).not.toContain('暂不支持 PDF 解析')
   })
 })
+
+describe('ImportView 的未识别提示', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+  })
+
+  it('没认出来的地方给出提示并列出那些行', async () => {
+    const { wrapper } = await mountImporter()
+    await parse(
+      wrapper,
+      `工作经历
+美团 前端工程师 2021-03 - 至今
+自我评价
+· 团队协作良好，认真负责
+`,
+    )
+
+    const alert = wrapper.findAll('.el-alert').find((node) => node.text().includes('我们没认出来'))
+    expect(alert).toBeDefined()
+    expect(alert!.text()).toContain('1 处')
+    expect(alert!.text()).toContain('自我评价')
+  })
+
+  it('全部认出来时不出现这条提示', async () => {
+    const { wrapper } = await mountImporter()
+    await parse(wrapper, RESUME)
+
+    const alerts = wrapper.findAll('.el-alert').map((node: { text: () => string }) => node.text())
+    expect(alerts.some((text) => text.includes('我们没认出来'))).toBe(false)
+  })
+})

@@ -270,3 +270,42 @@ describe('parseDraft 的分区表头识别', () => {
     }
   })
 })
+
+describe('parseDraft 的疑似表头检测', () => {
+  const WITH_UNRECOGNIZED = `工作经历
+美团 前端工程师 2021-03 - 至今
+自我评价
+· 团队协作良好，认真负责
+`
+
+  it('没被认出来的短行会被列出来', () => {
+    const result = parseDraft(WITH_UNRECOGNIZED, CTX, createIdSeed())
+    expect(result.ok).toBe(true)
+    expect(result.suspectedHeaders).toEqual(['自我评价'])
+  })
+
+  it('已经认出来的表头不会被列出来', () => {
+    const result = parseDraft(STANDARD, CTX, createIdSeed())
+    expect(result.suspectedHeaders).toEqual([])
+  })
+
+  it('普通要点不会被列出来', () => {
+    const result = parseDraft(
+      `工作经历\n美团 前端工程师 2021-03 - 至今\n抗压能力强\n日常维护团队组件库\n`,
+      CTX,
+      createIdSeed(),
+    )
+    expect(result.suspectedHeaders).toEqual([])
+  })
+
+  it('一个表头都没认出来时不报这份清单', () => {
+    const result = parseDraft('asdkjhaskdjhaskjdh\nqwertyuiopasdfgh', CTX, createIdSeed())
+    expect(result.ok).toBe(false)
+    expect(result.suspectedHeaders).toEqual([])
+  })
+
+  it('解析失败时清单是空的', () => {
+    const result = parseDraft('   \n  ', CTX, createIdSeed())
+    expect(result.suspectedHeaders).toEqual([])
+  })
+})

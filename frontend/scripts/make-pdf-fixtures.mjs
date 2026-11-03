@@ -9,6 +9,7 @@
 //   resume-sparse-text.pdf   只有几个字，模拟识别率极低的扫描件
 //   resume-two-column.pdf    左右两栏，两栏都有相当分量的文字
 //   resume-core-skills.pdf   分区写成「核心技能」，复现用户报的丢内容问题
+//   resume-self-review.pdf   带「自我评价」这类产品没有位置归属的分区
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -86,12 +87,25 @@ const coreSkills = page(`
   <ul><li>前端：Vue、React、TypeScript、Vite、Webpack</li></ul>
 `)
 
+// 「自我评价」产品里没有对应的分区，它的内容会被并进上一个分区——
+// 这份样例用来验证「没认出来」的提示会出现
+const selfReview = page(`
+  <h2>工作经历</h2>
+  <div class="row"><span>美团 前端工程师</span><span>2021-03 - 至今</span></div>
+  <ul><li>负责公司营销活动页面的前端开发，配合设计团队完成活动上线</li></ul>
+  <h2>自我评价</h2>
+  <ul><li>团队协作良好，认真负责，积极向上</li></ul>
+  <h2>获奖经历</h2>
+  <ul><li>年度技术突破奖</li></ul>
+`)
+
 const fixtures = [
   { name: 'resume-text-layer.pdf', html: withText },
   { name: 'resume-no-text.pdf', html: noText },
   { name: 'resume-sparse-text.pdf', html: sparseText },
   { name: 'resume-two-column.pdf', html: twoColumn },
   { name: 'resume-core-skills.pdf', html: coreSkills },
+  { name: 'resume-self-review.pdf', html: selfReview },
 ]
 
 const workDir = mkdtempSync(resolve(tmpdir(), 'pdf-fixtures-'))

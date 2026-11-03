@@ -136,6 +136,32 @@ function headerKindOf(line: string): SectionKind | null {
   return kindOfHeaderText(part)
 }
 
+/**
+ * 疑似未被识别的分区表头。
+ *
+ * 用户看不到「这份简历有 N 处我们没认出来」就无从判断哪里漏了。判据是一行
+ * 不被识别为表头、也不含日期、长度短、后面还有内容——符合「一段没有标题的
+ * 内容被并进了上一个分区」的形态。
+ *
+ * 阈值偏保守：宁可漏报也不误报，用户会逐渐习惯忽略误报，那这条提示就废了。
+ */
+export const SUSPECTED_HEADER_MAX_LENGTH = 4
+
+function findSuspectedHeaders(lines: string[]): string[] {
+  const suspected: string[] = []
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!
+    if (headerKindOf(line) !== null) continue
+    if (index === lines.length - 1) continue
+    if (stripBulletMarker(line)) continue
+    if (findDateSpan(line)) continue
+    const normalized = normalizeHeader(line)
+    if (normalized.length === 0 || normalized.length > SUSPECTED_HEADER_MAX_LENGTH) continue
+    suspected.push(line)
+  }
+  return suspected
+}
+
 function splitOrgTitle(text: string): { org?: string; title?: string } {
   const trimmed = text.trim()
   if (!trimmed) return {}
@@ -344,6 +370,7 @@ export function parseDraft(rawText: string, _ctx: EngineContext, seed: IdSeed): 
       draft: null,
       confidence: 0,
       warnings: [],
+      suspectedHeaders: [],
       failure: { reason: 'empty', message: '需要简历正文才能解析' },
     }
   }
@@ -367,6 +394,7 @@ export function parseDraft(rawText: string, _ctx: EngineContext, seed: IdSeed): 
       draft: null,
       confidence: 0,
       warnings: [],
+      suspectedHeaders: [],
       failure: { reason: 'unrecognized', message: '未能从这段文字中识别出简历结构' },
     }
   }
@@ -384,5 +412,8 @@ export function parseDraft(rawText: string, _ctx: EngineContext, seed: IdSeed): 
     updatedAt: '',
   }
 
-  return { ok: true, draft, confidence, warnings, failure: null }
+  // 启发式路径下已经有一条「未识别到分区表头」的警告了，不用再报一遍
+  const suspectedHeaders = hasHeader ? findSuspectedHeaders(lines) : []
+
+  return { ok: true, draft, confidence, warnings, suspectedHeaders, failure: null }
 }
