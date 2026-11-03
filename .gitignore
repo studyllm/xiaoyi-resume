@@ -17,3 +17,6 @@ coverage
 
 # pdf.js 的运行时资源，由 npm run predev / prebuild 从 node_modules 拷贝而来
 frontend/public/pdfjs/
+
+# 记忆目录属于工具链，不该进仓库
+memory/
