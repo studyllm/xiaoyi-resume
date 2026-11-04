@@ -1,11 +1,13 @@
 import { SAMPLE_DRAFT_TEXT, SAMPLE_JD_FRONTEND } from './fixtures'
+import type { ActiveState } from '@/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
 import { useUiStore } from '@/stores/ui'
 
 export interface DemoDataResult {
   draftSaved: boolean
-  reason?: string
+  /** 没存成时的状态：文案与用户能做的下一步都在状态表里。 */
+  failure?: ActiveState
 }
 
 /** 一键复现样例简历与样例 JD，未登录时用演示身份进入。 */
@@ -21,5 +23,5 @@ export function loadDemoData(): DemoDataResult {
 
   useUiStore().setDemoJd(SAMPLE_JD_FRONTEND)
 
-  return { draftSaved: outcome.ok, reason: outcome.reason }
+  return { draftSaved: outcome.ok, failure: outcome.failure }
 }

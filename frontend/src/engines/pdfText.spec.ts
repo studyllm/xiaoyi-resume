@@ -3,7 +3,14 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { extractPdfText, MAX_PDF_BYTES, SIMPLIFIED_RADICALS } from './pdfText'
+import { extractPdfText, MAX_PDF_BYTES, SIMPLIFIED_RADICALS, type PdfTextResult } from './pdfText'
+import { stateMessage } from '@/domain/states'
+
+/** 失败时用户看到的那一整句话。 */
+function failureText(result: PdfTextResult): string {
+  if (!result.failure) return ''
+  return stateMessage(result.failure.state, result.failure.vars)
+}
 
 function fixturePath(name: string): string {
   return fileURLToPath(new URL(`../mock/${name}`, import.meta.url))
@@ -78,7 +85,7 @@ describe('extractPdfText', () => {
 
     expect(result.ok).toBe(false)
     expect(result.failure?.reason).toBe('not-pdf')
-    expect(result.failure?.message).toContain('PDF')
+    expect(failureText(result)).toContain('PDF')
   })
 
   it('超过大小上限的文件被拒', async () => {
@@ -87,7 +94,7 @@ describe('extractPdfText', () => {
 
     expect(result.ok).toBe(false)
     expect(result.failure?.reason).toBe('too-large')
-    expect(result.failure?.message).toContain('MB')
+    expect(failureText(result)).toContain('MB')
   })
 
   it('字节头是 PDF 但内容损坏时报损坏', async () => {
@@ -96,7 +103,7 @@ describe('extractPdfText', () => {
 
     expect(result.ok).toBe(false)
     expect(result.failure?.reason).toBe('corrupted')
-    expect(result.failure?.message).toContain('读不出来')
+    expect(failureText(result)).toContain('读不出来')
   })
 })
 
@@ -119,7 +126,7 @@ describe('extractPdfText 的错误分类', () => {
 
     expect(result.ok).toBe(false)
     expect(result.failure?.reason).toBe('encrypted')
-    expect(result.failure?.message).toContain('口令')
+    expect(failureText(result)).toContain('口令')
   })
 
   it('其它异常归为读不出来', async () => {
@@ -127,6 +134,6 @@ describe('extractPdfText 的错误分类', () => {
 
     expect(result.ok).toBe(false)
     expect(result.failure?.reason).toBe('unknown')
-    expect(result.failure?.message).toContain('读不出来')
+    expect(failureText(result)).toContain('读不出来')
   })
 })

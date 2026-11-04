@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { collectDraftIds, createIdSeed, resumeIdSeed, type IdSeed } from '@/domain/ids'
+import { FAILURE_STATES, type ActiveState } from '@/domain/states'
 import type {
   Bullet,
   Diagnosis,
@@ -29,7 +30,8 @@ function cloneDraft(source: Draft): Draft {
 
 export interface SaveOutcome {
   ok: boolean
-  reason?: string
+  /** 没存成时的状态：文案与用户能做的下一步都在状态表里。 */
+  failure?: ActiveState
 }
 
 export const useDraftStore = defineStore('draft', () => {
@@ -146,10 +148,14 @@ export const useDraftStore = defineStore('draft', () => {
   /** 把解析结果存为简历（导入页用）。 */
   function savePending(options: { confirmed?: boolean } = {}): SaveOutcome {
     const session = useSessionStore()
-    if (!session.isLoggedIn) return { ok: false, reason: '需要登录后才能保存简历' }
-    if (!pending.value) return { ok: false, reason: '没有可保存的解析结果' }
+    if (!session.isLoggedIn) {
+      return { ok: false, failure: { state: FAILURE_STATES['not-logged-in'] } }
+    }
+    if (!pending.value) {
+      return { ok: false, failure: { state: FAILURE_STATES['nothing-to-save'] } }
+    }
     if (draft.value && !options.confirmed) {
-      return { ok: false, reason: '覆盖现有简历需要先确认' }
+      return { ok: false, failure: { state: FAILURE_STATES['confirm-overwrite'] } }
     }
 
     const next: Draft = {

@@ -7,6 +7,7 @@ import DiagnosisComment from '@/components/DiagnosisComment.vue'
 import SidebarEmpty from '@/components/SidebarEmpty.vue'
 import SidebarFilters from '@/components/SidebarFilters.vue'
 import StructureFindingsPanel from '@/components/StructureFindingsPanel.vue'
+import type { EmptyState } from '@/domain/states'
 import {
   SEVERITY_LABELS,
   type DiagnosisCategory,
@@ -25,7 +26,7 @@ const props = withDefaults(
     isIgnored: (issue: DiagnosisIssue) => boolean
     /** 诊断到了哪一步：还没诊断过、诊断过但没有意见、有意见。 */
     diagnosisState?: DiagnosisState
-    /** 空状态里那个按钮的文案，不同页面的下一步不一样。 */
+    /** 「还没有诊断结果」时那个按钮的文案，不同页面的下一步不一样。 */
     emptyActionLabel?: string
     /** 保存时查出来的结构问题，显示在栏的顶部 */
     structureFindings?: StructureFinding[]
@@ -95,6 +96,11 @@ function syncToViewport(): void {
 const severityFilter = ref<string>('all')
 const categoryFilter = ref<string>('all')
 
+/** 筛选条件有没有生效。 */
+const filterActive = computed(
+  () => severityFilter.value !== 'all' || categoryFilter.value !== 'all',
+)
+
 const visible = computed(() =>
   props.issues.filter((issue) => {
     if (props.isIgnored(issue)) return false
@@ -103,6 +109,34 @@ const visible = computed(() =>
     return true
   }),
 )
+
+/**
+ * 栏里现在该显示哪一种空状态。
+ *
+ * 「还没诊断」「诊断过但零意见」「有意见但被筛掉了」是三件不同的事，
+ * 混成一句「没有符合条件的批注」会让用户以为诊断没跑过。
+ */
+const emptyState = computed<EmptyState | null>(() => {
+  if (props.diagnosisState === 'none') return 'no-diagnosis'
+  if (props.diagnosisState === 'empty') return 'no-diagnosis-issues'
+  if (visible.value.length > 0) return null
+  return filterActive.value ? 'comments-filtered' : 'comments-ignored'
+})
+
+/** 只有「还没诊断」这一步在不同页面下不一样，其余的用状态表里的话。 */
+const emptyActionLabel = computed(() =>
+  emptyState.value === 'no-diagnosis' ? props.emptyActionLabel : undefined,
+)
+
+/** 空状态里的动作：筛空时清掉筛选，其余是发起诊断。 */
+function onEmptyAction(): void {
+  if (emptyState.value === 'comments-filtered') {
+    severityFilter.value = 'all'
+    categoryFilter.value = 'all'
+    return
+  }
+  emit('startDiagnosis')
+}
 
 const handledCount = computed(() => visible.value.filter((issue) => props.isHandled(issue.id)).length)
 const pendingCount = computed(() => visible.value.length - handledCount.value)
@@ -186,12 +220,11 @@ onBeforeUnmount(() => {
 
     <div v-if="!uiStore.commentSidebarCollapsed" class="sidebar-body">
       <SidebarEmpty
-        v-if="diagnosisState === 'none' || diagnosisState === 'empty'"
-        :state="diagnosisState"
+        v-if="emptyState"
+        :state="emptyState"
         :action-label="emptyActionLabel"
-        @start-diagnosis="emit('startDiagnosis')"
+        @action="onEmptyAction"
       />
-      <el-empty v-else-if="visible.length === 0" description="没有符合条件的批注" :image-size="60" />
       <DiagnosisComment
         v-for="issue in visible"
         :key="issue.id"

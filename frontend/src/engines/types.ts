@@ -1,4 +1,5 @@
 import type { IdSeed } from '@/domain/ids'
+import type { StateCopy } from '@/domain/states'
 import type {
   CoverageTier,
   Diagnosis,
@@ -19,7 +20,8 @@ export type ParseFailureReason = 'empty' | 'unrecognized'
 
 export interface ParseFailure {
   reason: ParseFailureReason
-  message: string
+  /** 状态表里对应的那条，文案与用户能做的下一步都在那里。 */
+  state: StateCopy
 }
 
 export interface ParseResult {

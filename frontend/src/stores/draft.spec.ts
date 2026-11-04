@@ -83,7 +83,7 @@ describe('useDraftStore', () => {
     store.ingest(RESUME)
     const outcome = store.savePending()
     expect(outcome.ok).toBe(false)
-    expect(outcome.reason).toContain('覆盖')
+    expect(outcome.failure?.state.title).toContain('覆盖')
   })
 
   it('overwrites an existing draft once the overwrite is confirmed', () => {
@@ -321,7 +321,7 @@ describe('useDraftStore', () => {
     store.ingest(RESUME)
     const outcome = store.savePending()
     expect(outcome.ok).toBe(false)
-    expect(outcome.reason).toContain('登录')
+    expect(outcome.failure?.state.title).toContain('登录')
     expect(store.hasDraft).toBe(false)
   })
 

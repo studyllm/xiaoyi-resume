@@ -3,6 +3,7 @@ import { computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import CommentSidebar from '@/components/CommentSidebar.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import ResumePreview, { type PreviewHighlight } from '@/components/ResumePreview.vue'
 import type { DiagnosisIssue } from '@/domain/types'
 import { anchorText } from '@/engines/anchor'
@@ -133,9 +134,7 @@ watch(
         <el-button text size="small" @click="runDiagnosis">重新诊断</el-button>
       </el-alert>
 
-      <el-empty v-if="!draft" description="还没有简历">
-        <el-button type="primary" @click="router.push('/import')">去导入简历</el-button>
-      </el-empty>
+      <EmptyState v-if="!draft" state="no-draft" @action="router.push('/import')" />
 
       <div v-else class="resume-canvas" @mouseup="onSelectText">
         <ResumePreview

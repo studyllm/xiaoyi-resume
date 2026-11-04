@@ -1,4 +1,4 @@
-import { assertCleanOutput } from './forbidden'
+import { FAILURE_STATES, WARNING_STATES, stateMessage, type StateCopy } from '@/domain/states'
 
 /**
  * 提取结果的文字质量。
@@ -19,7 +19,9 @@ export type PdfTextFailureReason =
 
 export interface PdfTextFailure {
   reason: PdfTextFailureReason
-  message: string
+  /** 状态表里对应的那条，文案与用户能做的下一步都在那里。 */
+  state: StateCopy
+  vars?: Record<string, string | number>
 }
 
 export interface PdfTextResult {
@@ -142,15 +144,18 @@ function readBytes(blob: Blob): Promise<ArrayBuffer> {
   })
 }
 
-function failure(reason: PdfTextFailureReason, message: string): PdfTextResult {
-  assertCleanOutput(message, 'PDF 提取失败提示')
+function failure(
+  reason: PdfTextFailureReason,
+  state: StateCopy,
+  vars?: Record<string, string | number>,
+): PdfTextResult {
   return {
     ok: false,
     text: '',
     pageCount: 0,
     quality: 'none',
     warnings: [],
-    failure: { reason, message },
+    failure: { reason, state, vars },
   }
 }
 
@@ -239,14 +244,14 @@ function classifyError(error: unknown): PdfTextFailureReason {
   return 'unknown'
 }
 
-function messageFor(reason: PdfTextFailureReason): string {
+function stateFor(reason: PdfTextFailureReason): StateCopy {
   switch (reason) {
     case 'encrypted':
-      return '这份 PDF 有打开口令。请先去掉口令再上传。'
+      return FAILURE_STATES['pdf-encrypted']
     case 'corrupted':
-      return '这份 PDF 读不出来，可能是文件损坏或格式不受支持。请换一个文件，或改用「粘贴文本」。'
+      return FAILURE_STATES['pdf-corrupted']
     default:
-      return '这份 PDF 读不出来。请换一个文件，或改用「粘贴文本」。'
+      return FAILURE_STATES['pdf-unreadable']
   }
 }
 
@@ -281,16 +286,15 @@ export async function extractPdfText(
   options: PdfTextOptions = {},
 ): Promise<PdfTextResult> {
   if (file.size > MAX_PDF_BYTES) {
-    return failure(
-      'too-large',
-      `这份文件超过 ${MAX_PDF_BYTES / 1024 / 1024} MB。请压缩后再上传。`,
-    )
+    return failure('too-large', FAILURE_STATES['pdf-too-large'], {
+      value: MAX_PDF_BYTES / 1024 / 1024,
+    })
   }
 
   // 文件类型按文件自身判定，不信浏览器给的 MIME——改个扩展名就能骗过它
   const magic = new TextDecoder().decode(new Uint8Array(await readBytes(file.slice(0, 5))))
   if (magic !== PDF_MAGIC) {
-    return failure('not-pdf', '这不是 PDF 文件。请上传 PDF，或改用「粘贴文本」。')
+    return failure('not-pdf', FAILURE_STATES['pdf-not-pdf'])
   }
 
   const base = import.meta.env.BASE_URL || '/'
@@ -301,7 +305,7 @@ export async function extractPdfText(
   try {
     pdfjs = await loadPdfjs()
   } catch {
-    return failure('unknown', 'PDF 读取组件加载失败。请刷新页面再试，或改用「粘贴文本」。')
+    return failure('unknown', FAILURE_STATES['pdf-engine-unavailable'])
   }
 
   const data = new Uint8Array(await readBytes(file))
@@ -317,15 +321,14 @@ export async function extractPdfText(
     document_ = await loadingTask.promise
   } catch (error) {
     const reason = classifyError(error)
-    return failure(reason, messageFor(reason))
+    return failure(reason, stateFor(reason))
   }
 
   try {
     if (document_.numPages > MAX_PDF_PAGES) {
-      return failure(
-        'too-many-pages',
-        `这份文件有 ${document_.numPages} 页，超过 ${MAX_PDF_PAGES} 页的上限。请只上传简历部分。`,
-      )
+      return failure('too-many-pages', FAILURE_STATES['pdf-too-many-pages'], {
+        value: document_.numPages,
+      })
     }
 
     const pages: string[] = []
@@ -342,7 +345,7 @@ export async function extractPdfText(
 
     const warnings: string[] = []
     if (quality === 'sparse') {
-      warnings.push('这份 PDF 能读到的文字很少，可能是扫描件或图片页。下面是读到的部分，请核对后再保存。')
+      warnings.push(stateMessage(WARNING_STATES['pdf-sparse']))
     }
 
     return {
@@ -355,7 +358,7 @@ export async function extractPdfText(
     }
   } catch (error) {
     const reason = classifyError(error)
-    return failure(reason, messageFor(reason))
+    return failure(reason, stateFor(reason))
   } finally {
     // 销毁走 loading task——v6 的文档对象上没有 destroy
     await loadingTask.destroy()

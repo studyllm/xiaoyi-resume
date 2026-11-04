@@ -7,6 +7,7 @@ import BrandLogo from '@/components/BrandLogo.vue'
 import ResumePreview, { type PreviewHighlight } from '@/components/ResumePreview.vue'
 import { SHOWCASE_COMMENTS, SHOWCASE_FRAGMENT_SECTIONS } from '@/mock/showcase'
 import { loadDemoData } from '@/mock/loadDemo'
+import { FAILURE_STATES, stateMessage } from '@/domain/states'
 import { useDraftStore } from '@/stores/draft'
 
 const router = useRouter()
@@ -52,7 +53,11 @@ function onIdentified(): void {
 function startDemo(): void {
   const result = loadDemoData()
   if (!result.draftSaved) {
-    ElMessage.warning(result.reason ?? '演示数据载入失败')
+    ElMessage.warning(
+      result.failure
+        ? stateMessage(result.failure.state, result.failure.vars)
+        : stateMessage(FAILURE_STATES['demo-load-failed']),
+    )
     return
   }
   router.push('/jd')

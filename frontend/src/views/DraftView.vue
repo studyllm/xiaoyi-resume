@@ -3,7 +3,9 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import CommentSidebar from '@/components/CommentSidebar.vue'
+import EmptyState from '@/components/EmptyState.vue'
 import ResumeEditor, { type EditorFocusTarget } from '@/components/ResumeEditor.vue'
+import { EMPTY_STATES, stateTitle } from '@/domain/states'
 import type { DiagnosisIssue, Draft } from '@/domain/types'
 import type { StructureFinding } from '@/engines/structure'
 import { useDraftStore } from '@/stores/draft'
@@ -144,8 +146,12 @@ watch(
         </div>
         <div class="page-actions">
           <span v-if="draft" class="draft-hint">
-            <template v-if="diagnosisState === 'none'">还没有诊断结果</template>
-            <template v-else-if="diagnosisState === 'empty'">没有查出问题</template>
+            <template v-if="diagnosisState === 'none'">
+              {{ stateTitle(EMPTY_STATES['no-diagnosis']) }}
+            </template>
+            <template v-else-if="diagnosisState === 'empty'">
+              {{ stateTitle(EMPTY_STATES['no-diagnosis-issues']) }}
+            </template>
             <template v-else-if="editable">批注 {{ issueCount }} 条</template>
             <template v-else>{{ issueCount }} 条诊断意见</template>
             <el-link type="primary" @click="goDiagnose">去诊断</el-link>
@@ -166,9 +172,7 @@ watch(
         </div>
       </div>
 
-      <el-empty v-if="!draft" description="还没有简历">
-        <el-button type="primary" @click="router.push('/import')">去导入简历</el-button>
-      </el-empty>
+      <EmptyState v-if="!draft" state="no-draft" @action="router.push('/import')" />
 
       <div v-else class="paper-canvas">
         <ResumeEditor
