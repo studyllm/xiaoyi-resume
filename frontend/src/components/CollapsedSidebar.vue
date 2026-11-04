@@ -23,7 +23,13 @@ const uiStore = useUiStore()
 
 <template>
   <div class="sidebar-collapsed">
-    <el-button size="small" text :icon="ArrowLeft" @click="uiStore.setSidebarCollapsed(false)" />
+    <el-button
+      size="small"
+      text
+      :icon="ArrowLeft"
+      aria-label="展开批注栏"
+      @click="uiStore.setSidebarCollapsed(false)"
+    />
     <span class="collapsed-title">批注</span>
     <span class="collapsed-total">{{ pendingCount }}</span>
     <span

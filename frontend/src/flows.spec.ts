@@ -8,6 +8,7 @@ import { FORBIDDEN_WORDS, findForbiddenWords } from '@/engines/forbidden'
 import {
   EMPTY_STATES,
   FAILURE_STATES,
+  STATUS_STATES,
   WARNING_STATES,
   stateHint,
   stateMessage,
@@ -644,7 +645,12 @@ describe('落地页的形态', () => {
 })
 
 describe('状态与文案体系', () => {
-  const ALL_STATES = { ...FAILURE_STATES, ...EMPTY_STATES, ...WARNING_STATES }
+  const ALL_STATES = {
+    ...FAILURE_STATES,
+    ...EMPTY_STATES,
+    ...WARNING_STATES,
+    ...STATUS_STATES,
+  }
 
   it('状态表里每条文案都非空，也不出现内部术语与禁用词', () => {
     const problems: string[] = []
@@ -700,5 +706,29 @@ describe('状态与文案体系', () => {
       }
     }
     expect(offenders).toEqual([])
+  })
+})
+
+describe('无障碍与响应式基线', () => {
+  it('只有图标的按钮都带可访问名称', () => {
+    // 断言属性存在是结构检查，不是样式效果——允许。
+    const offenders: string[] = []
+    for (const { name, template } of viewTemplateEntries()) {
+      for (const usage of buttonsIn(template)) {
+        const hasIcon = usage.attrs.includes(':icon=') || usage.attrs.includes(' icon=')
+        if (!hasIcon) continue
+        if (usage.text) continue
+        if (!usage.attrs.includes('aria-label=')) {
+          offenders.push(`${name} ${usage.attrs.trim()}`)
+        }
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('打印时纸面不被缩放', () => {
+    // 缩放只发生在屏幕这一侧；打印稿必须是 A4 原尺寸。
+    const canvas = readFileSync(join(componentsDirectory(), 'PaperCanvas.vue'), 'utf8')
+    expect(canvas).toMatch(/@media print[\s\S]*?zoom:\s*1/)
   })
 })

@@ -59,6 +59,7 @@ declare module 'vue' {
     EmptyState: typeof import('./../components/EmptyState.vue')['default']
     IdentityDialog: typeof import('./../components/IdentityDialog.vue')['default']
     ItemDates: typeof import('./../components/ItemDates.vue')['default']
+    PaperCanvas: typeof import('./../components/PaperCanvas.vue')['default']
     PaperField: typeof import('./../components/PaperField.vue')['default']
     ResumeEditor: typeof import('./../components/ResumeEditor.vue')['default']
     ResumePreview: typeof import('./../components/ResumePreview.vue')['default']

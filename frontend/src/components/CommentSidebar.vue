@@ -207,7 +207,13 @@ onBeforeUnmount(() => {
           <el-tag v-if="pendingCount > 0" size="small" type="warning" effect="plain">
             待处理 {{ pendingCount }}
           </el-tag>
-          <el-button size="small" text :icon="ArrowRight" @click="uiStore.setSidebarCollapsed(true)" />
+          <el-button
+            size="small"
+            text
+            :icon="ArrowRight"
+            aria-label="收起批注栏"
+            @click="uiStore.setSidebarCollapsed(true)"
+          />
         </div>
 
         <SidebarFilters

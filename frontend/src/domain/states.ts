@@ -235,3 +235,20 @@ export const WARNING_STATES = defineStates({
 })
 
 export type WarningState = keyof typeof WARNING_STATES
+
+/**
+ * 信息态：没出错，但用户想知道现在是什么状态。
+ * 用于向读屏软件播报的状态行——这类文案不需要「下一步」，说明写清含义即可。
+ */
+export const STATUS_STATES = defineStates({
+  'draft-dirty': {
+    title: '简历有未保存的修改',
+    hint: '保存之后这个标记会消失。',
+  },
+  'draft-saved': {
+    title: '简历已保存，共 {value} 条诊断意见',
+    hint: '改动只影响这一份简历，已经生成的版本不会跟着变。',
+  },
+})
+
+export type StatusState = keyof typeof STATUS_STATES

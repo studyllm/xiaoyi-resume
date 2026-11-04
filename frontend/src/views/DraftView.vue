@@ -4,8 +4,9 @@ import { useRouter } from 'vue-router'
 
 import CommentSidebar from '@/components/CommentSidebar.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import PaperCanvas from '@/components/PaperCanvas.vue'
 import ResumeEditor, { type EditorFocusTarget } from '@/components/ResumeEditor.vue'
-import { EMPTY_STATES, stateTitle } from '@/domain/states'
+import { EMPTY_STATES, STATUS_STATES, stateTitle } from '@/domain/states'
 import type { DiagnosisIssue, Draft } from '@/domain/types'
 import type { StructureFinding } from '@/engines/structure'
 import { useDraftStore } from '@/stores/draft'
@@ -28,6 +29,14 @@ const issueCount = computed(() => allIssues.value.length)
 
 /** 诊断到了哪一步：还没诊断过、诊断过但没有意见、有意见。 */
 const diagnosisState = computed(() => draftStore.diagnosisState)
+
+/** 纸面区域的状态。变化时向读屏软件播报，视觉上的反馈在别处。 */
+const paperStatus = computed(() => {
+  if (draftStore.dirty) return stateTitle(STATUS_STATES['draft-dirty'])
+  if (diagnosisState.value === 'none') return stateTitle(EMPTY_STATES['no-diagnosis'])
+  if (diagnosisState.value === 'empty') return stateTitle(EMPTY_STATES['no-diagnosis-issues'])
+  return stateTitle(STATUS_STATES['draft-saved'], { value: allIssues.value.length })
+})
 
 /** 侧栏里的「去诊断」把用户带到诊断页，诊断本身在那儿发起。 */
 function goDiagnose(): void {
@@ -174,7 +183,7 @@ watch(
 
       <EmptyState v-if="!draft" state="no-draft" @action="router.push('/import')" />
 
-      <div v-else class="paper-canvas">
+      <PaperCanvas v-else :status="paperStatus">
         <ResumeEditor
           :draft="draft"
           :issues="allIssues"
@@ -184,7 +193,7 @@ watch(
           @select-comment="onSelectComment"
           @save-request="saveEdits"
         />
-      </div>
+      </PaperCanvas>
     </div>
 
     <CommentSidebar
