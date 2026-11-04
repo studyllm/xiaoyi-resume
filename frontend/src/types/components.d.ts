@@ -56,6 +56,7 @@ declare module 'vue' {
     ElTabs: typeof import('element-plus/es')['ElTabs']
     ElTag: typeof import('element-plus/es')['ElTag']
     ElUpload: typeof import('element-plus/es')['ElUpload']
+    EmptyState: typeof import('./../components/EmptyState.vue')['default']
     IdentityDialog: typeof import('./../components/IdentityDialog.vue')['default']
     ItemDates: typeof import('./../components/ItemDates.vue')['default']
     PaperField: typeof import('./../components/PaperField.vue')['default']

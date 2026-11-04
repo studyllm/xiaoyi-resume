@@ -2,12 +2,14 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import EmptyState from '@/components/EmptyState.vue'
 import { SAMPLE_JDS } from '@/mock/fixtures'
 import type { RequirementCoverage } from '@/engines/types'
 import { engineContext, useEngines } from '@/stores/engines'
 import { useDraftStore } from '@/stores/draft'
 import { useUiStore } from '@/stores/ui'
 import { useVersionStore } from '@/stores/versions'
+import { FAILURE_STATES, stateMessage } from '@/domain/states'
 
 const router = useRouter()
 const draftStore = useDraftStore()
@@ -16,6 +18,8 @@ const uiStore = useUiStore()
 
 const step = ref(0)
 const jdText = ref('')
+/** JD 输入框。提取不到要求条目时要把焦点交回来。 */
+const jdInput = ref<{ focus: () => void } | null>(null)
 const roleName = ref('')
 const roleSource = ref('')
 const coverage = ref<RequirementCoverage[]>([])
@@ -40,7 +44,7 @@ const tierType: Record<string, 'success' | 'warning' | 'info'> = {
 
 function parseJd(): void {
   if (!jdText.value.trim()) {
-    ElMessage.warning('请先粘贴 JD 全文')
+    ElMessage.warning(stateMessage(FAILURE_STATES['jd-empty']))
     return
   }
 
@@ -58,13 +62,15 @@ function parseJd(): void {
     step.value = 1
   } catch (error) {
     coverage.value = []
-    ElMessage.error(error instanceof Error ? error.message : 'JD 解析失败')
+    ElMessage.error(
+      error instanceof Error ? error.message : stateMessage(FAILURE_STATES['jd-parse-failed']),
+    )
   }
 }
 
 function generate(): void {
   if (!draft.value) {
-    ElMessage.warning('需要先导入简历才能生成版本')
+    ElMessage.warning(stateMessage(FAILURE_STATES['generate-no-draft']))
     return
   }
 
@@ -83,8 +89,13 @@ function generate(): void {
     router.push(`/versions/${version.id}`)
   } catch (error) {
     generating.value = false
-    ElMessage.error(error instanceof Error ? error.message : '生成失败')
+    ElMessage.error(error instanceof Error ? error.message : stateMessage(FAILURE_STATES['generate-failed']))
   }
+}
+
+/** 把焦点交回 JD 输入框，用户改完再解析一次。 */
+function focusJdInput(): void {
+  jdInput.value?.focus()
 }
 
 function loadSample(text: string): void {
@@ -123,6 +134,7 @@ watch(
     <el-card class="card-block">
       <template #header>JD 全文</template>
       <el-input
+        ref="jdInput"
         v-model="jdText"
         type="textarea"
         :rows="12"
@@ -207,7 +219,7 @@ watch(
       </el-table>
     </el-card>
 
-    <el-empty v-if="step >= 1 && coverage.length === 0" description="没有从 JD 中提取到明确的要求条目" />
+    <EmptyState v-if="step >= 1 && coverage.length === 0" state="jd-no-requirements" @action="focusJdInput" />
 
     <div class="inline-row">
       <el-button type="primary" size="small" :loading="generating" :disabled="step < 1" @click="generate">

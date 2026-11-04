@@ -12,6 +12,14 @@ import { useSessionStore } from '@/stores/session'
 import { LOW_CONFIDENCE_THRESHOLD } from '@/engines/parseDraft'
 import { extractPdfText } from '@/engines/pdfText'
 import { findStructureFindings, type StructureFinding } from '@/engines/structure'
+import {
+  FAILURE_STATES,
+  WARNING_STATES,
+  stateHint,
+  stateMessage,
+  stateTitle,
+  type ActiveState,
+} from '@/domain/states'
 import type { Draft } from '@/domain/types'
 
 const router = useRouter()
@@ -25,7 +33,7 @@ const parsing = ref(false)
 const extracting = ref(false)
 const confidence = ref<number | null>(null)
 const warnings = ref<string[]>([])
-const failure = ref<string | null>(null)
+const failure = ref<ActiveState | null>(null)
 /** 疑似分区表头但没被认出来的行——它们的内容被并进了上一个分区。 */
 const otherHeaders = ref<string[]>([])
 /** 解析当时查出的结构问题。用户在纸上改的时候它不动，保存时重算。 */
@@ -37,6 +45,32 @@ const lowConfidence = computed(
   () => confidence.value !== null && confidence.value < LOW_CONFIDENCE_THRESHOLD,
 )
 
+/** 失败告警的标题与说明，分两栏给用户看。 */
+const failureTitle = computed(() =>
+  failure.value ? stateTitle(failure.value.state, failure.value.vars) : '',
+)
+const failureHint = computed(() =>
+  failure.value ? stateHint(failure.value.state, failure.value.vars) : '',
+)
+
+/** 三条警告的标题与说明。数量之类的可变内容由状态表的占位符带出来。 */
+const unrecognizedTitle = computed(() =>
+  stateTitle(WARNING_STATES['unrecognized-sections'], { value: otherHeaders.value.length }),
+)
+const unrecognizedHint = computed(() => stateHint(WARNING_STATES['unrecognized-sections']))
+const lowConfidenceTitle = computed(() => stateTitle(WARNING_STATES['low-confidence']))
+const lowConfidenceHint = computed(() => stateHint(WARNING_STATES['low-confidence']))
+const structureIssuesTitle = computed(() =>
+  stateTitle(WARNING_STATES['structure-issues'], { value: structureIssues.value.length }),
+)
+const structureIssuesHint = computed(() => stateHint(WARNING_STATES['structure-issues']))
+
+/** 记下一次失败：页面里挂告警，同时弹一条消息提示。 */
+function reportFailure(state: ActiveState['state'], vars?: ActiveState['vars']): void {
+  failure.value = { state, vars }
+  ElMessage.error(stateMessage(state, vars))
+}
+
 /** 结构问题出在哪：条目级报条目，分区级报分区。 */
 function anchorOf(finding: StructureFinding): string {
   if (finding.itemId) return `${finding.sectionTitle} · ${finding.itemLabel || '未命名条目'}`
@@ -47,8 +81,7 @@ function anchorOf(finding: StructureFinding): string {
 function parse(extraWarnings: string[] = []): boolean {
   failure.value = null
   if (!rawText.value.trim()) {
-    failure.value = '需要简历正文才能解析'
-    ElMessage.warning(failure.value)
+    reportFailure(FAILURE_STATES['parse-empty'])
     return false
   }
 
@@ -62,8 +95,7 @@ function parse(extraWarnings: string[] = []): boolean {
     warnings.value = [...extraWarnings]
     structureIssues.value = []
     otherHeaders.value = []
-    failure.value = result.failure?.message ?? '解析失败'
-    ElMessage.error(failure.value)
+    reportFailure(result.failure?.state ?? FAILURE_STATES['parse-failed'])
     return false
   }
 
@@ -91,18 +123,17 @@ async function onFileSelected(uploadFile: { raw?: File }): Promise<void> {
     const result = await extractPdfText(raw)
 
     if (!result.ok) {
-      failure.value = result.failure?.message ?? '这份 PDF 读不出来'
-      ElMessage.error(failure.value)
+      reportFailure(result.failure?.state ?? FAILURE_STATES['pdf-unreadable'], result.failure?.vars)
       return
     }
 
     if (result.quality === 'none') {
-      failure.value =
-        '这份 PDF 没有可读取的文字层，可能是扫描件或图片页。请改用「粘贴文本」，把内容贴进来。'
+      // 没有文字层：读到的文字帮不上忙，把用户带回粘贴页签
+      failure.value = { state: FAILURE_STATES['pdf-no-text-layer'] }
       tab.value = 'paste'
       await nextTick()
       pasteInput.value?.focus()
-      ElMessage.warning(failure.value)
+      ElMessage.warning(stateMessage(FAILURE_STATES['pdf-no-text-layer']))
       return
     }
 
@@ -138,7 +169,7 @@ function onIdentified(): void {
 
 async function save(): Promise<void> {
   if (!draftStore.pending) {
-    ElMessage.warning('还没有可保存的解析结果')
+    ElMessage.warning(stateMessage(FAILURE_STATES['nothing-to-save']))
     return
   }
 
@@ -167,7 +198,8 @@ async function doSave(): Promise<void> {
 
   const outcome = draftStore.savePending({ confirmed: true })
   if (!outcome.ok) {
-    ElMessage.error(outcome.reason ?? '保存失败')
+    const state = outcome.failure?.state ?? FAILURE_STATES['save-failed']
+    ElMessage.error(stateMessage(state, outcome.failure?.vars))
     return
   }
 
@@ -246,7 +278,8 @@ function loadDemo(): void {
       type="error"
       show-icon
       :closable="false"
-      :title="failure"
+      :title="failureTitle"
+      :description="failureHint"
     />
 
     <el-alert
@@ -255,9 +288,11 @@ function loadDemo(): void {
       type="warning"
       show-icon
       :closable="false"
-      :title="`这份简历有 ${otherHeaders.length} 段我们不确定属于哪个分区，放在「其它」里了`"
-      description="下面这几段没能归到教育、经历、项目、技能任何一个分区。可以在纸上直接改。"
+      :title="unrecognizedTitle"
     >
+      <!-- 说明与清单一起放进默认槽：组件库把默认槽当说明区，
+           一旦默认槽有内容，description 属性就不显示了。 -->
+      <p class="alert-hint">{{ unrecognizedHint }}</p>
       <ul class="issue-list">
         <li v-for="line in otherHeaders" :key="line">{{ line }}</li>
       </ul>
@@ -269,8 +304,8 @@ function loadDemo(): void {
       type="warning"
       show-icon
       :closable="false"
-      title="结构识别不完整，请确认后再保存"
-      description="这次解析没能认出全部分区标题，下面是按启发式推断的。可以在保存前直接在纸上改。"
+      :title="lowConfidenceTitle"
+      :description="lowConfidenceHint"
     />
 
     <el-alert
@@ -289,8 +324,9 @@ function loadDemo(): void {
       type="warning"
       show-icon
       :closable="false"
-      :title="`这份简历有 ${structureIssues.length} 处结构问题`"
+      :title="structureIssuesTitle"
     >
+      <p class="alert-hint">{{ structureIssuesHint }}</p>
       <ul class="issue-list">
         <li v-for="issue in structureIssues" :key="`${issue.ruleId}@${issue.itemId || issue.sectionId}`">
           {{ issue.label }} · {{ anchorOf(issue) }}

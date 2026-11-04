@@ -4,9 +4,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
+import type { DiagnosisIssue } from '@/domain/types'
 import type { StructureFinding } from '@/engines/structure'
 import { useUiStore } from '@/stores/ui'
 import CommentSidebar from './CommentSidebar.vue'
+import SidebarFilters from './SidebarFilters.vue'
 
 function finding(overrides: Partial<StructureFinding> = {}): StructureFinding {
   return {
@@ -28,6 +30,26 @@ function finding(overrides: Partial<StructureFinding> = {}): StructureFinding {
     sectionIndex: 1,
     itemIndex: 0,
     bulletIndex: -1,
+    ...overrides,
+  }
+}
+
+function issue(overrides: Partial<DiagnosisIssue> = {}): DiagnosisIssue {
+  return {
+    id: 'issue-1',
+    ruleId: 'missing-start',
+    category: 'structure',
+    severity: 'high',
+    sectionId: 'sec-experience',
+    sectionKind: 'experience',
+    sectionTitle: '工作经历',
+    itemId: 'item-1',
+    itemLabel: '美团 · 前端工程师',
+    bulletId: 'bullet-1',
+    quote: '负责活动页开发',
+    highlight: '活动页开发',
+    problem: '这段经历没有开始时间，时间线无法核对。',
+    suggestion: '补上开始时间。',
     ...overrides,
   }
 }
@@ -157,5 +179,39 @@ describe('CommentSidebar 的空状态', () => {
     const wrapper = await mountSidebar({ diagnosisState: 'none', emptyActionLabel: '去诊断' })
 
     expect(wrapper.find('.sidebar-empty button').text()).toContain('去诊断')
+  })
+
+  it('有意见但被筛选挡住时，说明是筛选挡住的，不是没有意见', async () => {
+    const wrapper = await mountSidebar({ diagnosisState: 'result', issues: [issue()] })
+
+    useUiStore().setSidebarCollapsed(false)
+    await flushPromises()
+
+    // 只看低危，这唯一的��高危意见就被挡住了
+    await wrapper.findComponent(SidebarFilters).vm.$emit('update:severity', 'low')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('当前条件下没有批注')
+    expect(wrapper.text()).not.toContain('还没有诊断结果')
+  })
+
+  it('清掉筛选就能看到批注', async () => {
+    const wrapper = await mountSidebar({ diagnosisState: 'result', issues: [issue()] })
+
+    useUiStore().setSidebarCollapsed(false)
+    await flushPromises()
+
+    await wrapper.findComponent(SidebarFilters).vm.$emit('update:severity', 'low')
+    await flushPromises()
+
+    const empty = wrapper.find('.sidebar-empty')
+    expect(empty.exists()).toBe(true)
+    expect(empty.text()).toContain('当前条件下没有批注')
+
+    await empty.find('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('当前条件下没有批注')
+    expect(wrapper.text()).toContain('活动页开发')
   })
 })

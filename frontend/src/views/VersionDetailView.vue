@@ -3,9 +3,11 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CopyDocument, Download } from '@element-plus/icons-vue'
 
+import EmptyState from '@/components/EmptyState.vue'
 import ResumePreview from '@/components/ResumePreview.vue'
 import type { DiffEntry, ResumeVersion, SectionKind } from '@/domain/types'
 import { renderMarkdown } from '@/engines/markdown'
+import { FAILURE_STATES, stateHint, stateMessage, stateTitle } from '@/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { useVersionStore } from '@/stores/versions'
 
@@ -79,7 +81,7 @@ async function copyText(text: string, label: string): Promise<void> {
     await navigator.clipboard.writeText(text)
     ElMessage.success(`${label}已复制`)
   } catch {
-    ElMessage.error('复制失败，请手动选择正文')
+    ElMessage.error(stateMessage(FAILURE_STATES['copy-failed']))
   }
 }
 
@@ -113,8 +115,8 @@ async function exportPdf(): Promise<void> {
   if (!hasProfile()) {
     try {
       await ElMessageBox.confirm(
-        '这份简历还没有姓名与联系方式，导出的 PDF 不能直接投递。要先回去补全抬头吗？',
-        '抬头缺失',
+        stateHint(FAILURE_STATES['export-missing-profile']),
+        stateTitle(FAILURE_STATES['export-missing-profile']),
         { type: 'warning', confirmButtonText: '去补全', cancelButtonText: '仍然导出' },
       )
       router.push('/draft')
@@ -131,9 +133,7 @@ async function exportPdf(): Promise<void> {
 
 <template>
   <div class="page">
-    <el-empty v-if="!version" description="没有找到这个版本">
-      <el-button type="primary" @click="router.push('/versions')">回到版本列表</el-button>
-    </el-empty>
+    <EmptyState v-if="!version" state="version-not-found" @action="router.push('/versions')" />
 
     <template v-else>
       <div class="page-header">
@@ -220,7 +220,7 @@ async function exportPdf(): Promise<void> {
         </el-tab-pane>
 
         <el-tab-pane :label="`改动对照（${version.diff.length}）`" name="diff">
-          <el-empty v-if="groups.length === 0" description="没有可对照的改动" />
+          <EmptyState v-if="groups.length === 0" state="no-diff" />
 
           <div v-for="group in groups" :key="`${group.sectionKind}:${group.itemId}`" class="diff-group">
             <h3 class="diff-group-title">
@@ -254,10 +254,7 @@ async function exportPdf(): Promise<void> {
         </el-tab-pane>
 
         <el-tab-pane :label="`未覆盖要求（${version.uncovered.length}）`" name="uncovered">
-          <el-empty
-            v-if="version.uncovered.length === 0"
-            description="这份 JD 的要求在你的简历中都能找到对应事实"
-          />
+          <EmptyState v-if="version.uncovered.length === 0" state="all-covered" />
           <el-table v-else :data="version.uncovered" size="small">
             <el-table-column label="JD 原句" min-width="320">
               <template #default="{ row }">{{ row.text }}</template>

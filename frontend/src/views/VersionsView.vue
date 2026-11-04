@@ -3,7 +3,9 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { CopyDocument, Delete, Document, Download, Plus, View } from '@element-plus/icons-vue'
 
+import EmptyState from '@/components/EmptyState.vue'
 import { maskForbiddenWords } from '@/engines/forbidden'
+import { EMPTY_STATES, FAILURE_STATES, stateHint, stateMessage } from '@/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { useVersionStore } from '@/stores/versions'
 
@@ -30,7 +32,7 @@ async function copyBody(text: string): Promise<void> {
     await navigator.clipboard.writeText(text)
     ElMessage.success('正文已复制')
   } catch {
-    ElMessage.error('复制失败，请手动选择正文')
+    ElMessage.error(stateMessage(FAILURE_STATES['copy-failed']))
   }
 }
 
@@ -64,7 +66,7 @@ function remove(id: string): void {
             {{
               draftStore.hasDraft
                 ? `当前修订号 ${draftStore.draft?.revision}，共 ${versionStore.versions.length} 个版本`
-                : '还没有简历，先导入一份'
+                : stateHint(EMPTY_STATES['no-draft'])
             }}
           </div>
         </div>
@@ -89,9 +91,7 @@ function remove(id: string): void {
       description="系统不会自动删除任何版本，每个版本都是一份独立的快照，需要你自己确认后删除。"
     />
 
-    <el-empty v-if="versions.length === 0" description="还没有生成任何版本">
-      <el-button type="primary" @click="router.push('/jd')">去粘贴 JD</el-button>
-    </el-empty>
+    <EmptyState v-if="versions.length === 0" state="no-versions" @action="router.push('/jd')" />
 
     <div v-else class="version-cards">
       <el-card v-for="version in versions" :key="version.id" class="version-card" shadow="never">

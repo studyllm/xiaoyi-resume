@@ -5,6 +5,14 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { FORBIDDEN_WORDS, findForbiddenWords } from '@/engines/forbidden'
+import {
+  EMPTY_STATES,
+  FAILURE_STATES,
+  WARNING_STATES,
+  stateHint,
+  stateMessage,
+  stateTitle,
+} from '@/domain/states'
 import { renderMarkdown } from '@/engines/markdown'
 import { SAMPLE_DRAFT_TEXT, SAMPLE_JD_BACKEND, SAMPLE_JD_FRONTEND } from '@/mock/fixtures'
 import { useDraftStore } from '@/stores/draft'
@@ -134,6 +142,34 @@ function divRanges(template: string, className: string): [number, number][] {
     ranges.push([match.index, end])
   }
   return ranges
+}
+
+interface SourceEntry {
+  name: string
+  source: string
+}
+
+/** 视图、组件与布局的整份文件，不只模板。 */
+function viewSourceEntries(): SourceEntry[] {
+  const directories = [viewsDirectory(), componentsDirectory(), layoutsDirectory()]
+  const entries: SourceEntry[] = []
+  for (const directory of directories) {
+    for (const name of readdirSync(directory).filter((file) => file.endsWith('.vue'))) {
+      entries.push({ name, source: readFileSync(join(directory, name), 'utf8') })
+    }
+  }
+  return entries
+}
+
+/**
+ * 去掉注释，免得把说明文字当成界面文案。
+ * 行注释只认整行都是注释的那种，免得把网址里的 // 一起吃掉。
+ */
+function stripComments(source: string): string {
+  return source
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '')
 }
 
 /** el-empty 元素的成对区间：空状态里的按钮不与页面动作同屏。 */
@@ -604,5 +640,65 @@ describe('落地页的形态', () => {
     for (const overlay of overlays) {
       expect(solidOf(overlay.template).length).toBeLessThanOrEqual(1)
     }
+  })
+})
+
+describe('状态与文案体系', () => {
+  const ALL_STATES = { ...FAILURE_STATES, ...EMPTY_STATES, ...WARNING_STATES }
+
+  it('状态表里每条文案都非空，也不出现内部术语与禁用词', () => {
+    const problems: string[] = []
+    for (const [key, state] of Object.entries(ALL_STATES)) {
+      if (!state.title.trim()) problems.push(`${key} 缺标题`)
+      if (!state.hint.trim()) problems.push(`${key} 缺说明`)
+      if (state.action !== undefined && !state.action.trim()) problems.push(`${key} 的主动作是空的`)
+      for (const text of [state.title, state.hint, state.action ?? '']) {
+        if (text.includes(INTERNAL_TERM)) problems.push(`${key} 出现了「底稿」`)
+        if (findForbiddenWords(text).length > 0) problems.push(`${key} 出现了禁用词`)
+      }
+    }
+    expect(problems).toEqual([])
+  })
+
+  it('每条失败提示都给出了下一步', () => {
+    // 「失败」后面必须跟着用户能做的动作，否则用户只知道自己没成，不知道怎么办。
+    const cues = ['请', '改', '再', '换', '检查', '刷新', '重新', '手动', '先']
+    const problems: string[] = []
+    for (const [key, state] of Object.entries(FAILURE_STATES)) {
+      if (!cues.some((cue) => state.hint.includes(cue))) {
+        problems.push(`${key} 的说明里没有下一步`)
+      }
+    }
+    expect(problems).toEqual([])
+  })
+
+  it('占位符只用 {value} 一个名字', () => {
+    // 调用方只可能知道一个可变的量：出问题的那一个。多一个名字就多一处要对上的地方。
+    const names = new Set<string>()
+    for (const state of Object.values(ALL_STATES)) {
+      for (const text of [state.title, state.hint]) {
+        for (const match of text.matchAll(/\{(\w+)\}/g)) names.add(match[1])
+      }
+    }
+    expect([...names].sort()).toEqual(['value'])
+  })
+
+  it('占位符填得上', () => {
+    expect(stateTitle(FAILURE_STATES['pdf-too-large'], { value: 10 })).toBe('文件太大')
+    expect(stateHint(FAILURE_STATES['pdf-too-large'], { value: 10 })).toContain('10 MB')
+    expect(stateMessage(FAILURE_STATES['pdf-too-large'], { value: 10 })).toContain('10 MB')
+    expect(stateTitle(WARNING_STATES['structure-issues'], { value: 3 })).toContain('3 处')
+  })
+
+  it('失败与空态的文案只从状态表里取', () => {
+    const markers = ['失败', '还没有', '没有找到', '请先', '需要先', '没能', '读不出来', '不可用']
+    const offenders: string[] = []
+    for (const { name, source } of viewSourceEntries()) {
+      const code = stripComments(source)
+      for (const marker of markers) {
+        if (code.includes(marker)) offenders.push(`${name} 里出现了「${marker}」`)
+      }
+    }
+    expect(offenders).toEqual([])
   })
 })

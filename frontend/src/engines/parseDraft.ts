@@ -1,4 +1,5 @@
 import type { IdSeed } from '@/domain/ids'
+import { FAILURE_STATES } from '@/domain/states'
 import { findDateSpan } from '@/domain/time'
 import type { Bullet, Draft, DraftItem, DraftSection, SectionKind } from '@/domain/types'
 import { REQUIRED_SECTION_KINDS, SECTION_ORDER, SECTION_TITLES } from '@/domain/types'
@@ -366,7 +367,7 @@ export function parseDraft(rawText: string, _ctx: EngineContext, seed: IdSeed): 
       confidence: 0,
       warnings: [],
       otherHeaders: [],
-      failure: { reason: 'empty', message: '需要简历正文才能解析' },
+      failure: { reason: 'empty', state: FAILURE_STATES['parse-empty'] },
     }
   }
 
@@ -390,7 +391,7 @@ export function parseDraft(rawText: string, _ctx: EngineContext, seed: IdSeed): 
       confidence: 0,
       warnings: [],
       otherHeaders: [],
-      failure: { reason: 'unrecognized', message: '未能从这段文字中识别出简历结构' },
+      failure: { reason: 'unrecognized', state: FAILURE_STATES['parse-failed'] },
     }
   }
 

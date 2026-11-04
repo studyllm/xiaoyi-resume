@@ -145,3 +145,25 @@ html .el-button.is-text:not(.is-disabled):not(.el-button--danger):not(.paper-del
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* 空状态的三层结构：标题、说明、主动作。说明与标题分开写，
+   不要拿一句话同时充当两者——用户分不清现在是缺东西还是没认出来。 */
+.empty-state-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.empty-state-desc {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  color: var(--ink-500);
+}
+
+/* 告警里跟在标题后面的那句说明。它跟清单一起放进 description 槽，
+   所以要自己跟下面的清单拉开距离。 */
+.alert-hint {
+  margin: 0;
+}

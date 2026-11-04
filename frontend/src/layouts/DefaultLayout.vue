@@ -5,6 +5,7 @@ import { Document, Files, MagicStick, Promotion } from '@element-plus/icons-vue'
 
 import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
+import { FAILURE_STATES, stateHint, stateTitle } from '@/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { persistence } from '@/stores/persistence'
 import { useSessionStore } from '@/stores/session'
@@ -90,7 +91,8 @@ function logout(): void {
       type="error"
       show-icon
       :closable="false"
-      title="本地存储不可用，刷新后数据会丢失"
+      :title="stateTitle(FAILURE_STATES['storage-unavailable'])"
+      :description="stateHint(FAILURE_STATES['storage-unavailable'])"
     />
 
     <el-container class="layout-body">

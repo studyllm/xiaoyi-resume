@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
+import { FAILURE_STATES, stateMessage } from '@/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
 import { useUiStore } from '@/stores/ui'
@@ -97,7 +98,7 @@ router.beforeEach(async (to, from) => {
   }
 
   if (to.meta.requiresDraft && !draftStore.hasDraft) {
-    ElMessage.warning('需要先导入简历才能继续')
+    ElMessage.warning(stateMessage(FAILURE_STATES['draft-required']))
     return { path: '/import' }
   }
 
