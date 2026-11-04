@@ -1,0 +1,188 @@
+# 服务端技术栈
+
+P3 服务端化的技术选型。**决策记录在 ADR 里，这份文档是总览与操作说明。**
+
+| 决策 | 记录在哪 |
+| --- | --- |
+| 引擎放哪 | [`adr/0004-engine-placement.md`](adr/0004-engine-placement.md) |
+| 鉴权模型 | [`adr/0002-auth-model.md`](adr/0002-auth-model.md) |
+| 引擎模式开关 | [`adr/0001-engine-mode-switch.md`](adr/0001-engine-mode-switch.md) |
+
+---
+
+## 1. 选型
+
+| 层 | 选型 | 为什么 | 谁出局 |
+| --- | --- | --- | --- |
+| 语言与运行时 | **TypeScript + Node 22** | 引擎是产品的核心逻辑，复制两份必然漂移（F9） | Python / Go / Rust：破 F9 |
+| 包结构 | **npm workspaces** | 一份源码、一个 lockfile，共享包靠工具链保证不漂移 | 独立仓库：多一套发布与版本对齐 |
+| HTTP 框架 | **Fastify + TypeBox** | schema-first，**契约可执行** | Express：校验与类型要自己拼；Nest：12 人日里学框架成本太高；Hono：edge-first，长驻容器 + Postgres + session 的插件生态不如 Fastify 成熟 |
+| 数据库 | **PostgreSQL 16** | 事务（账号隔离、版本快照）+ JSONB 存简历树 | SQLite：并发写与后续扩展会咬人；把简历拆成关系表：树形硬拆更复杂 |
+| 数据层 | **Drizzle ORM + SQL 迁移文件** | schema 就是 TS 文件，与共享包同语言；迁移能手工审 | Prisma：自带 DSL 与 Rust 引擎，镜像更大、迁移要另一套工具链 |
+| 鉴权 | **自建会话**：httpOnly cookie + 服务端 session 表 + argon2id | 完全可控，隐私面小 | Auth.js / Lucia：要迁就框架抽象；BaaS 的 Auth：隐私面多一个供应商 |
+| 密码哈希 | **argon2id** | 内存硬、抗 GPU | bcrypt：内存硬参数受限 |
+| 邮件 | **阿里云邮件推送**（备选 Resend） | 送达率到 163 / QQ / 126 | 见 ADR-0002 第 6 节 |
+| 观测 | **pino** 结构化日志 + 请求 id | T3.9，且**不含简历正文** | — |
+| 错误上报 | **Sentry**（服务端 SDK） | 异常带上下文 | — |
+| 部署 | **单容器 + 单实例 Postgres**（Docker Compose） | 计划 §7.5 的假设：不引入 K8s 与多副本 | — |
+
+---
+
+## 2. 为什么语言这一条是硬的
+
+三条约束几乎把选择空间锁死了：
+
+**F9（共享引擎）是唯一致命的一条。** `domain/` + `engines/` 必须是同一份源码，前端与服务端引用同一份。引擎就是产品的核心逻辑——诊断规则、措辞变换、「不编造」的不变量校验。复制成两份，漂移只是时间问题，而漂移的代价是核心承诺失效。
+
+引擎现在就在浏览器里跑且无 DOM 依赖，所以**服务端必须能跑 TypeScript**。这条直接否掉 Python（FastAPI 的 LLM 生态再好）、Go、Rust。
+
+**ADR-0004 已经把服务端形态定了：它不是纯存储 API，是引擎宿主。** 因此服务端需要能跑长请求（生成版本在规则引擎下是毫秒级，P4 接模型后是十秒级），也需要能拿到用户数据算覆盖——两者都指向长驻进程，不是函数。
+
+**「后端由前端工程师兼任」（计划 §7.5），P3 共 14 人日。** 语言统一省掉一次跨语言调试；熟悉度直接决定这 14 人日够不够。
+
+---
+
+## 3. 目录结构
+
+```
+packages/shared/          domain/ + engines/（除 pdfText.ts）
+  domain/                 types / time / ids / sectionFields / states / breakpoints
+  engines/                parseDraft / diagnose / jd / generateVersion / …
+
+apps/frontend/            现在的 frontend/
+apps/server/              Node 服务
+  src/routes/             路由与 TypeBox schema（契约在这里）
+  src/db/                 Drizzle schema 与迁移
+  src/auth/               会话、密码、邮件
+  src/engines/            ResumeEngines 的远端实现（包一层 HTTP）
+
+docs/api-contract.md      契约的**说明**（代码才是契约本身）
+```
+
+`pdfText.ts` 留在前端——PDF 提取是浏览器能力，且 P1 承诺过文件不上传。
+
+---
+
+## 4. 契约：写代码，不写散文
+
+`docs/api-contract.md`（计划 D1）**不是**手写的文档，而是 TypeBox schema 的说明。
+
+```ts
+// apps/server/src/routes/resume.ts
+export const saveResume = {
+  body: Type.Object({ text: Type.String({ minLength: 1 }) }),
+  response: Type.Object({
+    draft: DraftSchema,
+    revision: Type.Integer(),
+  }),
+}
+```
+
+前后端从**同一份 schema** 取类型。好处有三层：
+
+1. **契约漂移在编译期暴露**，不是上线后暴露。
+2. 计划 A3.1 的「契约测试」不需要额外写——schema 本身就是断言。
+3. 错误码与用户文案的映射（F7）能从 schema 生成，`docs/error-taxonomy.md` 的状态表与服务端的错误码一一对应。
+
+---
+
+## 5. 数据模型
+
+| 表 | 内容 | 备注 |
+| --- | --- | --- |
+| `users` | `id`（UUID）、`email`（规范化）、`email_verified_at`、`password_hash` | `id` 不可猜测、不含邮箱（F5） |
+| `sessions` | `id`、`user_id`、`expires_at` | 登出全清靠它 |
+| `verification_tokens` | `user_id`、`kind`（验证 / 重置）、`token_hash`、`expires_at` | **只存哈希** |
+| `drafts` | `user_id`（唯一）、`payload`（JSONB）、`revision` | 一账号一份底稿 |
+| `versions` | `id`、`user_id`、`payload`（JSONB）、`created_at` | 版本快照，不可变 |
+
+简历与版本存 JSONB，不拆关系表——它们是树形结构，硬拆成表比 JSONB 更复杂。**账号隔离靠外键与查询条件，不靠前端**（计划 A3.2 要求后端断言）。
+
+schema 版本号与迁移链沿用 `stores/persistence.ts` 现成的「版本号 + 迁移链 + 迁移失败不白屏」范式（计划 T3.3，**有先例，勿另造一套**）。
+
+---
+
+## 6. 部署与运维
+
+**全部自管**（用户决定）：一台 VPS + Docker Compose，应用容器与 Postgres 容器同机。
+
+### 6.1 备份
+
+| 项 | 定法 |
+| --- | --- |
+| 频率 | 每晚 `pg_dump` |
+| 去向 | **离机**——加密后传到 S3 兼容对象存储（阿里云 OSS / 腾讯云 COS / Backblaze B2） |
+| 保留 | 日备 7 份 + 周备 4 份 |
+| **演练** | **每月把备份恢复到临时容器跑一遍校验**——没演练过的备份不算备份 |
+| 加密 | 备份文件静态加密，密钥与备份分开存放 |
+
+同机备份等于没备份——机器坏了备份跟着一起坏。
+
+### 6.2 监控
+
+不上 Prometheus。一台机器撑不起那套东西，还多一个要维护的组件。
+
+| 项 | 做法 |
+| --- | --- |
+| 存活 | 应用暴露 `/healthz`；外部 uptime 监控（Uptime Kuma 自托管，或 healthchecks.io 定时 ping） |
+| 异常 | Sentry 服务端 SDK |
+| 数据库 | 每日巡检 SQL（连接数、慢查询、磁盘余量、备份是否成功）→ 邮件告警 |
+| 证书 | 域名证书自动续期，到期前 14 天告警 |
+
+### 6.3 升级
+
+Postgres **季度一次**，读 release note 再上，不追最新版。
+
+### 6.4 数据泄露剧本
+
+计划 D9（`docs/ops/runbook.md`）的一部分，P5 写全。骨架：
+
+1. 轮换数据库密码与全部密钥。
+2. 查审计日志确认泄露范围（**日志不含简历正文**，所以能查清访问了哪些记录，但查不到内容）。
+3. 按监管要求通知受影响用户。
+4. 从备份恢复，或按用户请求删除其数据。
+
+---
+
+## 7. 本地怎么跑
+
+```bash
+docker compose up -d postgres      # 本地数据库
+npm run dev                        # 前端（mock 模式，默认）
+npm run dev:server                 # 服务端（remote 模式）
+```
+
+前端默认走 `mock`（ADR-0001：未知值静默回落）。要连服务端时设 `VITE_ENGINE_MODE=remote`。
+
+CI 三侧全绿（计划 A3.5）：前端 `npm run verify`、服务端 `npm run test`、共享包 `npm run test`。
+
+---
+
+## 8. 明确不做的
+
+| 不做 | 为什么 |
+| --- | --- |
+| K8s、多副本 | 计划 §7.5 的假设；单实例足够 |
+| 微服务拆分 | 一个人 14 人日，微服务只会把接口变多 |
+| GraphQL | REST + TypeBox schema 已经够；契约的收益来自 schema，不来自 GraphQL |
+| Redis / 消息队列 | 单实例没有并发压力；P4 接模型后如果生成要排队，再引入 |
+| 服务端渲染 | 产品是纯前端 SPA，SSR 解决不了这里的任何问题 |
+| 第三方登录、短信、多因素 | ADR-0002 第 7 节 |
+| 审计日志单独一套 | 先用 Postgres 的表记，规模上来再抽 |
+
+---
+
+## 9. 工期
+
+**14 人日**（12 + 邮箱验证与找回密码的 2）。分配：
+
+| 项 | 人日 |
+| --- | --- |
+| API 契约冻结 + 服务端骨架 | 2 |
+| 鉴权（注册、验证、登录、登出全清、找回密码、发信） | 4 |
+| 共享包抽取 + 引擎异步化 | 2 |
+| 数据模型、迁移与存储 | 3 |
+| 前端接入（会话、路由守卫、离线降级、存量迁移） | 2 |
+| 部署、备份、监控、可观测 | 1 |
+
+「后端由前端工程师兼任」是这条估算的前提。专职后端可以压到约 10。
