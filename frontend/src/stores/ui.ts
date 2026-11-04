@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+
+import { tierFor, type ViewportTier } from '@/domain/breakpoints'
 
 export type UnsavedChoice = 'save' | 'discard' | 'stay'
 
@@ -16,6 +18,10 @@ export const useUiStore = defineStore('ui', () => {
   const pendingEditRequest = ref<string | null>(null)
   /** 离开页面时的未保存修改选择。 */
   const unsavedChoicePending = ref(false)
+
+  /** 视口宽度。断点判定只有这一处。 */
+  const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
+  const viewportTier = computed<ViewportTier>(() => tierFor(viewportWidth.value))
   let unsavedResolver: ((choice: UnsavedChoice) => void) | null = null
 
   /** 离开前问清楚：保存并离开、放弃修改并离开、还是留在本页。 */
@@ -42,6 +48,10 @@ export const useUiStore = defineStore('ui', () => {
 
   function isIssueIgnored(issueId: string): boolean {
     return ignoredIssueKeys.value.includes(issueId)
+  }
+
+  function setViewportWidth(width: number): void {
+    viewportWidth.value = width
   }
 
   function setDemoJd(text: string | null): void {
@@ -130,8 +140,11 @@ export const useUiStore = defineStore('ui', () => {
     scrollToSection,
     pendingEditRequest,
     unsavedChoicePending,
+    viewportWidth,
+    viewportTier,
     ignoreIssue,
     isIssueIgnored,
+    setViewportWidth,
     setDemoJd,
     selectComment,
     markHandled,

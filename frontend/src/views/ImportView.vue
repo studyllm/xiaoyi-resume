@@ -3,6 +3,7 @@ import { computed, nextTick, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { UploadFilled } from '@element-plus/icons-vue'
 
+import PaperCanvas from '@/components/PaperCanvas.vue'
 import ResumeEditor from '@/components/ResumeEditor.vue'
 import IdentityDialog from '@/components/IdentityDialog.vue'
 import { SAMPLE_DRAFT_TEXT, SAMPLE_JDS } from '@/mock/fixtures'
@@ -347,14 +348,14 @@ function loadDemo(): void {
         </div>
       </div>
 
-      <div class="paper-canvas">
+      <PaperCanvas>
         <ResumeEditor
           :draft="draftStore.pending"
           :editable="true"
           @change="onChange"
           @save-request="save"
         />
-      </div>
+      </PaperCanvas>
     </template>
 
     <IdentityDialog

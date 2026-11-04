@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import CommentSidebar from '@/components/CommentSidebar.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import PaperCanvas from '@/components/PaperCanvas.vue'
 import ResumeEditor, { type EditorFocusTarget } from '@/components/ResumeEditor.vue'
 import { EMPTY_STATES, stateTitle } from '@/domain/states'
 import type { DiagnosisIssue, Draft } from '@/domain/types'
@@ -28,6 +29,14 @@ const issueCount = computed(() => allIssues.value.length)
 
 /** 诊断到了哪一步：还没诊断过、诊断过但没有意见、有意见。 */
 const diagnosisState = computed(() => draftStore.diagnosisState)
+
+/** 纸面区域的状态。变化时向读屏软件播报，视觉上的反馈在别处。 */
+const paperStatus = computed(() => {
+  if (draftStore.dirty) return '简历有未保存的修改'
+  if (diagnosisState.value === 'none') return '还没有诊断结果'
+  if (diagnosisState.value === 'empty') return '诊断没有查出问题'
+  return `简历已保存，共 ${allIssues.value.length} 条诊断意见`
+})
 
 /** 侧栏里的「去诊断」把用户带到诊断页，诊断本身在那儿发起。 */
 function goDiagnose(): void {
@@ -174,7 +183,7 @@ watch(
 
       <EmptyState v-if="!draft" state="no-draft" @action="router.push('/import')" />
 
-      <div v-else class="paper-canvas">
+      <PaperCanvas v-else :status="paperStatus">
         <ResumeEditor
           :draft="draft"
           :issues="allIssues"
@@ -184,7 +193,7 @@ watch(
           @select-comment="onSelectComment"
           @save-request="saveEdits"
         />
-      </div>
+      </PaperCanvas>
     </div>
 
     <CommentSidebar

@@ -84,6 +84,9 @@
 
   /* ---- 纸面尺寸 ---- */
   --paper-width: 210mm;
+
+  /* 顶栏高度。抽屉要从顶栏下面开始，两处得用同一个值。 */
+  --layout-header-height: 60px;
   /* 落地页样例区里的简历片段：不是整页 A4，宽度由内容可读性决定 */
   --paper-fragment-width: 420px;
 

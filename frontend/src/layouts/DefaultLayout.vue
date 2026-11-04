@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Document, Files, MagicStick, Promotion } from '@element-plus/icons-vue'
 
 import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
+import { rendersWorkbench, usesDrawer } from '@/domain/breakpoints'
+import { useViewport } from '@/composables/useViewport'
 import { FAILURE_STATES, stateHint, stateTitle } from '@/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { persistence } from '@/stores/persistence'
@@ -17,7 +19,29 @@ const session = useSessionStore()
 const draftStore = useDraftStore()
 const uiStore = useUiStore()
 
+useViewport()
+
 const isPublic = computed(() => route.meta.public === true)
+
+/** 这一档下侧栏是不是覆盖式的抽屉。 */
+const drawerMode = computed(() => usesDrawer(uiStore.viewportTier))
+/** 屏幕太小就只给降级提示，工作台整块不渲染。 */
+const workbenchVisible = computed(() => rendersWorkbench(uiStore.viewportTier))
+const navOpen = ref(false)
+
+function closeNav(): void {
+  navOpen.value = false
+}
+
+// 换页面就把抽屉收起来——否则新页面还压着一层侧栏
+watch(() => route.path, closeNav)
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') closeNav()
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 /** 编辑页时，侧栏下半部分给出当前简历的分区目录。 */
 const outline = computed(() => {
@@ -49,9 +73,28 @@ function logout(): void {
 <template>
   <router-view v-if="isPublic" />
 
-  <el-container v-else class="layout">
+  <div v-else-if="!workbenchVisible" class="layout-too-small">
+    <BrandLogo variant="bar" />
+    <h1 class="layout-too-small-title">请在更大的屏幕上使用</h1>
+    <p class="layout-too-small-text">
+      这份简历要在一张 A4 纸上编辑和对照，手机屏幕放不下。把窗口拉宽到 768 像素以上，或者换一台屏幕更宽的电脑。
+    </p>
+  </div>
+
+  <el-container v-else class="layout" :class="{ 'is-nav-open': navOpen }">
     <el-header class="layout-header">
       <div class="inline-row">
+        <el-button
+          v-if="drawerMode"
+          class="layout-nav-toggle"
+          size="small"
+          text
+          :aria-label="navOpen ? '收起导航' : '打开导航'"
+          :aria-expanded="navOpen"
+          @click="navOpen = !navOpen"
+        >
+          导航
+        </el-button>
         <router-link to="/" class="layout-title" title="回到首页">
           <BrandLogo variant="bar" />
           <span>小奕·简历</span>
@@ -95,8 +138,20 @@ function logout(): void {
       :description="stateHint(FAILURE_STATES['storage-unavailable'])"
     />
 
+    <div
+      v-if="drawerMode && navOpen"
+      class="layout-backdrop"
+      aria-hidden="true"
+      @click="closeNav"
+    />
+
     <el-container class="layout-body">
-      <el-aside width="200px" class="layout-aside">
+      <el-aside
+        width="200px"
+        class="layout-aside"
+        :class="{ 'is-drawer': drawerMode }"
+        :inert="drawerMode && !navOpen ? '' : undefined"
+      >
         <el-menu :default-active="activeMenu" :default-openeds="['work', 'deliver']" router>
           <el-sub-menu index="work">
             <template #title>
@@ -163,6 +218,7 @@ function logout(): void {
 }
 
 .layout-header {
+  height: var(--layout-header-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -259,6 +315,55 @@ function logout(): void {
   overflow-y: auto;
   background: var(--paper);
   border-right: 1px solid var(--ink-150);
+}
+
+/* 抽屉态：侧栏覆盖在内容之上，不占内容区的宽度。
+   推开内容会让正在看的纸面跳位置，编辑中的用户会失去上下文。 */
+.layout-aside.is-drawer {
+  position: fixed;
+  top: var(--layout-header-height);
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+}
+
+.layout.is-nav-open .layout-aside.is-drawer {
+  transform: translateX(0);
+}
+
+.layout-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--ink-900);
+  opacity: 0.32;
+}
+
+.layout-too-small {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  height: 100%;
+  padding: var(--space-xl);
+  text-align: center;
+}
+
+.layout-too-small-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.layout-too-small-text {
+  max-width: 32em;
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.8;
+  color: var(--ink-500);
 }
 
 .el-main.layout-main {

@@ -702,3 +702,27 @@ describe('状态与文案体系', () => {
     expect(offenders).toEqual([])
   })
 })
+
+describe('无障碍与响应式基线', () => {
+  it('只有图标的按钮都带可访问名称', () => {
+    // 断言属性存在是结构检查，不是样式效果——允许。
+    const offenders: string[] = []
+    for (const { name, template } of viewTemplateEntries()) {
+      for (const usage of buttonsIn(template)) {
+        const hasIcon = usage.attrs.includes(':icon=') || usage.attrs.includes(' icon=')
+        if (!hasIcon) continue
+        if (usage.text) continue
+        if (!usage.attrs.includes('aria-label=')) {
+          offenders.push(`${name} ${usage.attrs.trim()}`)
+        }
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('打印时纸面不被缩放', () => {
+    // 缩放只发生在屏幕这一侧；打印稿必须是 A4 原尺寸。
+    const canvas = readFileSync(join(componentsDirectory(), 'PaperCanvas.vue'), 'utf8')
+    expect(canvas).toMatch(/@media print[\s\S]*?zoom:\s*1/)
+  })
+})
