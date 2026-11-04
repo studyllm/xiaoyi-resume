@@ -6,7 +6,7 @@ import CommentSidebar from '@/components/CommentSidebar.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import PaperCanvas from '@/components/PaperCanvas.vue'
 import ResumeEditor, { type EditorFocusTarget } from '@/components/ResumeEditor.vue'
-import { EMPTY_STATES, stateTitle } from '@/domain/states'
+import { EMPTY_STATES, STATUS_STATES, stateTitle } from '@/domain/states'
 import type { DiagnosisIssue, Draft } from '@/domain/types'
 import type { StructureFinding } from '@/engines/structure'
 import { useDraftStore } from '@/stores/draft'
@@ -32,10 +32,10 @@ const diagnosisState = computed(() => draftStore.diagnosisState)
 
 /** 纸面区域的状态。变化时向读屏软件播报，视觉上的反馈在别处。 */
 const paperStatus = computed(() => {
-  if (draftStore.dirty) return '简历有未保存的修改'
-  if (diagnosisState.value === 'none') return '还没有诊断结果'
-  if (diagnosisState.value === 'empty') return '诊断没有查出问题'
-  return `简历已保存，共 ${allIssues.value.length} 条诊断意见`
+  if (draftStore.dirty) return stateTitle(STATUS_STATES['draft-dirty'])
+  if (diagnosisState.value === 'none') return stateTitle(EMPTY_STATES['no-diagnosis'])
+  if (diagnosisState.value === 'empty') return stateTitle(EMPTY_STATES['no-diagnosis-issues'])
+  return stateTitle(STATUS_STATES['draft-saved'], { value: allIssues.value.length })
 })
 
 /** 侧栏里的「去诊断」把用户带到诊断页，诊断本身在那儿发起。 */

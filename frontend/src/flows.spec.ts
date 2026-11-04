@@ -8,6 +8,7 @@ import { FORBIDDEN_WORDS, findForbiddenWords } from '@/engines/forbidden'
 import {
   EMPTY_STATES,
   FAILURE_STATES,
+  STATUS_STATES,
   WARNING_STATES,
   stateHint,
   stateMessage,
@@ -644,7 +645,12 @@ describe('落地页的形态', () => {
 })
 
 describe('状态与文案体系', () => {
-  const ALL_STATES = { ...FAILURE_STATES, ...EMPTY_STATES, ...WARNING_STATES }
+  const ALL_STATES = {
+    ...FAILURE_STATES,
+    ...EMPTY_STATES,
+    ...WARNING_STATES,
+    ...STATUS_STATES,
+  }
 
   it('状态表里每条文案都非空，也不出现内部术语与禁用词', () => {
     const problems: string[] = []
