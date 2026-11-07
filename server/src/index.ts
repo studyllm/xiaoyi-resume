@@ -1,6 +1,7 @@
 import { buildApp } from './app'
 import { createSmtpMailer } from './auth/smtp'
 import { createDatabase } from './db/client'
+import { createMemoryIdempotencyStore } from './db/idempotency'
 import { createPostgresStore } from './db/store'
 
 /**
@@ -25,6 +26,7 @@ const database = createDatabase(required('DATABASE_URL'))
 
 const app = buildApp({
   store: createPostgresStore(database),
+  idempotency: createMemoryIdempotencyStore(),
   mailer: createSmtpMailer({
     host: required('SMTP_HOST'),
     port: Number(process.env.SMTP_PORT ?? 465),

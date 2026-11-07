@@ -25,6 +25,12 @@ describe('账号存储', () => {
     expect(stored).not.toContain('correct horse')
   })
 
+  it('用的是 argon2id', async () => {
+    // ADR-0002 定的是 argon2id。格式写进哈希串里，改算法一眼能看出来。
+    const stored = await hashPassword('correct horse')
+    expect(stored.startsWith('$argon2id$')).toBe(true)
+  })
+
   it('邮箱规范化后大小写与空白不影响查找', async () => {
     expect(normalizeEmail('  Someone@Example.COM ')).toBe('someone@example.com')
 

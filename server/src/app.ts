@@ -2,15 +2,19 @@ import cookie from '@fastify/cookie'
 import Fastify, { type FastifyInstance } from 'fastify'
 
 import type { MailSender } from './auth/mailer'
+import type { IdempotencyStore } from './db/idempotency'
 import type { Store } from './db/store'
 import { registerAuthRoutes } from './routes/auth'
 import { registerHealthz } from './routes/healthz'
 import { registerImportRoutes } from './routes/import'
 import { registerParse } from './routes/parse'
+import { registerResumeRoutes } from './routes/resume'
 
 export interface AppDeps {
-  /** 账号与会话的存取。 */
+  /** 账号、会话与简历版本的存取。 */
   store: Store
+  /** 幂等键的记忆。 */
+  idempotency: IdempotencyStore
   /** 发信。 */
   mailer: MailSender
   /** 站点对外地址，验证与重置链接指向它。 */
@@ -34,6 +38,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerParse(app)
   registerAuthRoutes(app, deps)
   registerImportRoutes(app, { store: deps.store })
+  registerResumeRoutes(app, { store: deps.store, idempotency: deps.idempotency })
 
   return app
 }

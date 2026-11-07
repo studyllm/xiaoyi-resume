@@ -4,12 +4,14 @@ import { createIdSeed } from '@xiaoyi/shared/domain/ids'
 import { parseDraft } from '@xiaoyi/shared/engines/parseDraft'
 import { createMemoryMailer } from './auth/mailer'
 import { buildApp } from './app'
+import { createMemoryIdempotencyStore } from './db/idempotency'
 import { createMemoryStore } from './db/store'
 
 /** 测试用的应用：内存存储 + 内存发信器。 */
 function testApp() {
   return buildApp({
     store: createMemoryStore(),
+    idempotency: createMemoryIdempotencyStore(),
     mailer: createMemoryMailer(),
     siteUrl: 'http://localhost:5173',
     from: 'noreply@xiaoyi.example',
