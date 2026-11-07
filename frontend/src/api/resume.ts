@@ -1,15 +1,6 @@
 import { api } from './client'
 import type { Draft, ResumeVersion } from '@xiaoyi/shared/domain/types'
 
-/** 版本列表项。服务端不返回正文——列表要轻（契约 §4.4）。 */
-export interface VersionSummary {
-  id: string
-  name: string
-  jdRoleName: string
-  draftRevision: number
-  createdAt: string
-}
-
 export interface DraftResponse {
   draft: Draft
   revision: number
@@ -39,10 +30,10 @@ export function saveDraft(
 }
 
 export function fetchVersions(signal?: AbortSignal): Promise<{
-  items: VersionSummary[]
+  items: ResumeVersion[]
   total: number
 }> {
-  return api<{ items: VersionSummary[]; total: number }>('/api/v1/versions', { signal })
+  return api<{ items: ResumeVersion[]; total: number }>('/api/v1/versions', { signal })
 }
 
 export function fetchVersion(id: string, signal?: AbortSignal): Promise<{ version: ResumeVersion }> {

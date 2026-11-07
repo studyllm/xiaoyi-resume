@@ -8,6 +8,7 @@ import { maskForbiddenWords } from '@xiaoyi/shared/engines/forbidden'
 import { EMPTY_STATES, FAILURE_STATES, stateHint, stateMessage } from '@xiaoyi/shared/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { useVersionStore } from '@/stores/versions'
+import { ApiError } from '@/api/client'
 
 const router = useRouter()
 const draftStore = useDraftStore()
@@ -40,9 +41,15 @@ function exportPdf(id: string): void {
   router.push(`/versions/${id}/print`)
 }
 
-function remove(id: string): void {
-  versionStore.remove(id)
-  ElMessage.success('版本已删除')
+async function remove(id: string): Promise<void> {
+  try {
+    await versionStore.remove(id)
+    ElMessage.success('版本已删除')
+  } catch (error) {
+    ElMessage.error(
+      error instanceof ApiError ? `${error.state.title}。${error.state.hint}` : stateMessage(FAILURE_STATES['delete-failed']),
+    )
+  }
 }
 </script>
 

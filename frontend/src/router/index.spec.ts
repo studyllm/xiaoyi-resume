@@ -1,11 +1,52 @@
 // @vitest-environment jsdom
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
 import { useUiStore } from '@/stores/ui'
 import router from './index'
+
+// 服务端的简历读写在测试里 mock 掉：读取按「连不上」处理（退回本地缓存），
+// 保存按成功处理。这样用例的语义不变——本地缓存仍是读的那一份。
+vi.mock('@/api/resume', async () => {
+  const { ApiError } = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  const { ALL_STATES } = await vi.importActual<
+    typeof import('@xiaoyi/shared/domain/states')
+  >('@xiaoyi/shared/domain/states')
+  return {
+    fetchDraft: vi.fn(async () => {
+      throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true)
+    }),
+    saveDraft: vi.fn(async (_draft: unknown, revision: number) => ({
+      revision: revision + 1,
+      savedAt: '2026-01-01T00:00:00.000Z',
+    })),
+    fetchVersions: vi.fn(async () => ({ items: [], total: 0 })),
+    fetchVersion: vi.fn(),
+    createVersion: vi.fn(async () => ({
+      version: {
+        id: 'ver-1',
+        userId: '',
+        name: '版本',
+        profile: { name: '', headline: '', contacts: [] },
+        body: '',
+        sections: [],
+        diff: [],
+        uncovered: [],
+        coverage: [],
+        integrity: { checked: 0, violations: [] },
+        engineVersion: 'x',
+        jdRawText: '',
+        jdRoleName: '',
+        draftRevision: 1,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    })),
+    deleteVersion: vi.fn(async () => undefined),
+  }
+})
+
 
 const RESUME = `工作经历
 美团 前端工程师 2021.03 - 至今
@@ -17,10 +58,10 @@ async function flushGuard(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-function setupDirtyDraft() {
+async function setupDirtyDraft(): Promise<ReturnType<typeof useDraftStore>> {
   const draftStore = useDraftStore()
   draftStore.ingest(RESUME)
-  draftStore.savePending()
+  await draftStore.savePending()
   draftStore.updateProfile({ name: '临时改动' })
   return draftStore
 }
@@ -33,7 +74,7 @@ describe('路由离开时的未保存提示', () => {
   })
 
   it('留在本页时不离开，也不改动内容', async () => {
-    const draftStore = setupDirtyDraft()
+    const draftStore = await setupDirtyDraft()
     await router.push('/draft')
     const uiStore = useUiStore()
 
@@ -48,7 +89,7 @@ describe('路由离开时的未保存提示', () => {
   })
 
   it('保存并离开时先存一次，修订号加一', async () => {
-    const draftStore = setupDirtyDraft()
+    const draftStore = await setupDirtyDraft()
     await router.push('/draft')
     const uiStore = useUiStore()
     const before = draftStore.savedRevision
@@ -65,7 +106,7 @@ describe('路由离开时的未保存提示', () => {
   })
 
   it('放弃修改并离开时回到上次保存的样子', async () => {
-    const draftStore = setupDirtyDraft()
+    const draftStore = await setupDirtyDraft()
     await router.push('/draft')
     const uiStore = useUiStore()
 
@@ -80,9 +121,9 @@ describe('路由离开时的未保存提示', () => {
   })
 
   it('没有未保存的修改时直接离开', async () => {
-    const draftStore = setupDirtyDraft()
+    const draftStore = await setupDirtyDraft()
     await router.push('/draft')
-    draftStore.saveEdits()
+    await draftStore.saveEdits()
 
     await router.push('/diagnosis')
     expect(router.currentRoute.value.path).toBe('/diagnosis')

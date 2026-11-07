@@ -197,6 +197,10 @@ export const FAILURE_STATES = defineStates({
     hint: '账号还没建好，等一会儿再试一次。',
     code: 'EMAIL_SEND_FAILED',
   },
+  'delete-failed': {
+    title: '删除失败',
+    hint: '版本还在。等一会儿再试，或者刷新页面看看。',
+  },
   'offline': {
     title: '现在连不上服务器',
     hint: '改动还在这个页面上，等连上再保存。',

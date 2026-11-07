@@ -79,7 +79,8 @@ export const drafts = pgTable('drafts', {
 export const versions = pgTable(
   'versions',
   {
-    id: uuid('id').primaryKey(),
+    // 版本 id 由引擎生成（version-1 这种，可读且可复现），不是 uuid
+    id: text('id').primaryKey(),
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),

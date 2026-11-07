@@ -131,7 +131,7 @@ describe('简历与版本的端点', () => {
     expect(stale.json().error.code).toBe('DRAFT_REVISION_CONFLICT')
   })
 
-  it('版本列表分页，条目是摘要不含正文', async () => {
+  it('版本列表分页，返回完整版本', async () => {
     const h = harness()
     const cookie = await login(h)
     const user = await h.store.findUserByEmail('someone@example.com')
@@ -147,7 +147,8 @@ describe('简历与版本的端点', () => {
     expect(body.total).toBe(2)
     expect(body.items).toHaveLength(1)
     expect(body.items[0].id).toBe('v2')
-    expect(body.items[0].body).toBeUndefined()
+    // 列表返回完整版本：前端不用逐个拉详情
+    expect(body.items[0].body).toBe('工作经历')
   })
 
   it('别人的版本看不见', async () => {

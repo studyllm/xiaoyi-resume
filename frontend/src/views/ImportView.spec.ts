@@ -13,6 +13,47 @@ import { useSessionStore } from '@/stores/session'
 import type { Draft } from '@xiaoyi/shared/domain/types'
 import ImportView from './ImportView.vue'
 
+// 服务端的简历读写在测试里 mock 掉：读取按「连不上」处理（退回本地缓存），
+// 保存按成功处理。这样用例的语义不变——本地缓存仍是读的那一份。
+vi.mock('@/api/resume', async () => {
+  const { ApiError } = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  const { ALL_STATES } = await vi.importActual<
+    typeof import('@xiaoyi/shared/domain/states')
+  >('@xiaoyi/shared/domain/states')
+  return {
+    fetchDraft: vi.fn(async () => {
+      throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true)
+    }),
+    saveDraft: vi.fn(async (_draft: unknown, revision: number) => ({
+      revision: revision + 1,
+      savedAt: '2026-01-01T00:00:00.000Z',
+    })),
+    fetchVersions: vi.fn(async () => ({ items: [], total: 0 })),
+    fetchVersion: vi.fn(),
+    createVersion: vi.fn(async () => ({
+      version: {
+        id: 'ver-1',
+        userId: '',
+        name: '版本',
+        profile: { name: '', headline: '', contacts: [] },
+        body: '',
+        sections: [],
+        diff: [],
+        uncovered: [],
+        coverage: [],
+        integrity: { checked: 0, violations: [] },
+        engineVersion: 'x',
+        jdRawText: '',
+        jdRoleName: '',
+        draftRevision: 1,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    })),
+    deleteVersion: vi.fn(async () => undefined),
+  }
+})
+
+
 vi.mock('@/api/client', async () => {
   const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
   return {
