@@ -89,6 +89,8 @@ export interface AccountStore {
 
   createSession(input: { id: string; userId: string; expiresAt: Date }): Promise<void>
   findSession(id: string): Promise<StoredSession | null>
+  /** 滑动续期：把到期时间往后推。 */
+  touchSession(id: string, expiresAt: Date): Promise<void>
   deleteSession(id: string): Promise<void>
   /** 登出全清：删掉这个用户的全部会话。 */
   deleteSessionsOfUser(userId: string): Promise<void>
@@ -153,6 +155,10 @@ export function createMemoryStore(): AccountStore {
     },
     async findSession(id) {
       return sessionRows.get(id) ?? null
+    },
+    async touchSession(id, expiresAt) {
+      const row = sessionRows.get(id)
+      if (row) row.expiresAt = expiresAt
     },
     async deleteSession(id) {
       sessionRows.delete(id)
@@ -224,6 +230,9 @@ export function createPostgresStore(db: PostgresDatabase): AccountStore {
     async findSession(id) {
       const rows = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1)
       return rows[0] ?? null
+    },
+    async touchSession(id, expiresAt) {
+      await db.update(sessions).set({ expiresAt }).where(eq(sessions.id, id))
     },
     async deleteSession(id) {
       await db.delete(sessions).where(eq(sessions.id, id))
