@@ -1,90 +1,98 @@
 // @vitest-environment jsdom
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useSessionStore } from '@/stores/session'
-import IdentityDialog, { type IdentityReason } from './IdentityDialog.vue'
+import { ApiError, api } from '@/api/client'
+import { ALL_STATES } from '@xiaoyi/shared/domain/states'
+import IdentityDialog from './IdentityDialog.vue'
 
-async function mountDialog(reason: IdentityReason = 'continue', lastName = '') {
+vi.mock('@/api/client', async () => {
+  const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  return { ...actual, api: vi.fn() }
+})
+
+async function mountDialog() {
   const pinia = createPinia()
   setActivePinia(pinia)
-  if (lastName) useSessionStore().login(lastName)
   const wrapper = mount(IdentityDialog, {
-    props: { modelValue: true, reason },
-    attachTo: document.body,
+    props: { modelValue: true },
     global: { plugins: [pinia] },
   })
-  // 对话框内容是异步渲染的，等它出来再操作
   await flushPromises()
   return wrapper
 }
 
-type DialogWrapper = Awaited<ReturnType<typeof mountDialog>>
-
-async function submit(wrapper: DialogWrapper): Promise<void> {
-  const button = wrapper.findAllComponents({ name: 'ElButton' }).find((item) =>
-    item.text().includes('继续') || item.text().includes('保存'),
-  )
-  if (!button) throw new Error('找不到提交按钮')
-  await button.trigger('click')
-  await flushPromises()
-  // 表单项的错误提示有 100ms 的防抖，等它渲染出来
-  await new Promise((resolve) => setTimeout(resolve, 150))
-  await flushPromises()
+/** 对话框里的输入框：第一个是邮箱，第二个是密码。 */
+function inputs(wrapper: Awaited<ReturnType<typeof mountDialog>>) {
+  return wrapper.findAll('input')
 }
 
-describe('身份对话框', () => {
+function clickButton(wrapper: Awaited<ReturnType<typeof mountDialog>>, text: string) {
+  const button = wrapper.findAll('button').find((item) => item.text() === text)
+  expect(button, `找不到按钮：${text}`).toBeDefined()
+  return button!
+}
+
+describe('登录对话框', () => {
   beforeEach(() => {
-    document.body.innerHTML = ''
+    vi.mocked(api).mockReset()
   })
 
-  it('只问名字，没有密码输入项', async () => {
+  it('要邮箱与密码，不要名字', async () => {
     const wrapper = await mountDialog()
-    expect(wrapper.findAllComponents({ name: 'ElInput' })).toHaveLength(1)
-    expect(document.body.textContent).not.toContain('密码')
+
+    expect(wrapper.text()).toContain('邮箱')
+    expect(wrapper.text()).toContain('密码')
+    expect(wrapper.text()).not.toContain('你的名字')
+
+    const types = inputs(wrapper).map((input) => input.attributes('type'))
+    expect(types).toContain('email')
+    expect(types).toContain('password')
   })
 
-  it('名字为空时给出错误，不建立登录态', async () => {
+  it('登录成功就确认', async () => {
+    vi.mocked(api).mockResolvedValue({ user: { id: 'u1', email: 'a@example.com' } })
     const wrapper = await mountDialog()
-    await submit(wrapper)
 
-    expect(useSessionStore().isLoggedIn).toBe(false)
-    expect(document.body.textContent).toContain('请填写名字')
-  })
+    const [email, password] = inputs(wrapper)
+    await email!.setValue('a@example.com')
+    await password!.setValue('correct horse battery')
+    await clickButton(wrapper, '登录').trigger('click')
+    await flushPromises()
 
-  it('填了名字就能建立登录态并通知调用方', async () => {
-    const wrapper = await mountDialog()
-    const inputs = wrapper.findAllComponents({ name: 'ElInput' })
-    await inputs[0]!.setValue('张三')
-    await submit(wrapper)
-
-    expect(useSessionStore().isLoggedIn).toBe(true)
-    expect(useSessionStore().user?.username).toBe('张三')
     expect(wrapper.emitted('confirmed')).toHaveLength(1)
   })
 
-  it('打开时预填上次用过的名字', async () => {
-    const wrapper = await mountDialog('continue', '张三')
-    const input = wrapper.findAllComponents({ name: 'ElInput' })[0]!
-    expect(input.props('modelValue')).toBe('张三')
+  it('失败时显示状态表里的文案，不自己另写', async () => {
+    const state = ALL_STATES['invalid-credentials']!
+    vi.mocked(api).mockRejectedValue(new ApiError('INVALID_CREDENTIALS', state))
+    // eslint-disable-next-line no-console
+    const wrapper = await mountDialog()
+
+    const [email, password] = inputs(wrapper)
+    await email!.setValue('a@example.com')
+    await password!.setValue('nope')
+    await clickButton(wrapper, '登录').trigger('click')
+    await flushPromises()
+    await flushPromises()
+
+    expect(vi.mocked(api)).toHaveBeenCalled()
+    expect(wrapper.emitted('confirmed')).toBeUndefined()
   })
 
-  it('没有用过的名字时输入框是空的', async () => {
-    const wrapper = await mountDialog('continue')
-    const input = wrapper.findAllComponents({ name: 'ElInput' })[0]!
-    expect(input.props('modelValue')).toBe('')
-  })
+  it('可以切到注册与找回密码', async () => {
+    const wrapper = await mountDialog()
 
-  it('保存场景说的是这份简历归你', async () => {
-    await mountDialog('save')
-    expect(document.body.textContent).toContain('这份简历归你')
-    expect(document.body.textContent).toContain('只存在这台设备上')
-  })
+    await clickButton(wrapper, '没有账号？注册一个').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('验证邮件')
 
-  it('继续场景说的是留个名字就能继续', async () => {
-    await mountDialog('continue')
-    expect(document.body.textContent).toContain('留个名字就能继续')
-    expect(document.body.textContent).toContain('不需要注册账号')
+    await clickButton(wrapper, '返回登录').trigger('click')
+    await flushPromises()
+
+    await clickButton(wrapper, '忘记密码').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('重置链接')
   })
 })

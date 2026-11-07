@@ -64,8 +64,8 @@ const activeMenu = computed(() => {
   return route.path
 })
 
-function logout(): void {
-  session.logout()
+async function logout(): Promise<void> {
+  await session.logout()
   router.push('/')
 }
 </script>
@@ -114,8 +114,8 @@ function logout(): void {
         </el-button>
         <el-dropdown v-if="session.isLoggedIn">
           <span class="inline-row">
-            <el-avatar :size="28">{{ session.user?.username?.slice(0, 1) ?? '匿' }}</el-avatar>
-            <span>{{ session.user?.username }}</span>
+            <el-avatar :size="28">{{ session.user?.email?.slice(0, 1) ?? '匿' }}</el-avatar>
+            <span>{{ session.user?.email }}</span>
           </span>
           <template #dropdown>
             <el-dropdown-menu>

@@ -50,8 +50,8 @@ function onIdentified(): void {
   if (target) router.push(target)
 }
 
-function startDemo(): void {
-  const result = loadDemoData()
+async function startDemo(): Promise<void> {
+  const result = await loadDemoData()
   if (!result.draftSaved) {
     ElMessage.warning(
       result.failure

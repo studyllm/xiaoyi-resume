@@ -20,3 +20,6 @@ frontend/public/pdfjs/
 
 # 记忆目录属于工具链，不该进仓库
 memory/
+
+# 本地 Docker 的 Postgres 数据卷
+postgres-data

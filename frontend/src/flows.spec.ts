@@ -217,7 +217,7 @@ const ACTION_PRIMARY_LIMITS: Record<string, number> = { 'ImportView.vue': 2 }
 
 function seedDraft(): void {
   const session = useSessionStore()
-  session.login('张三')
+  session.user = { id: 'user-张三', email: '张三@example.com' }; session.status = 'user'
   const draftStore = useDraftStore()
   draftStore.ingest(SAMPLE_DRAFT_TEXT)
   draftStore.savePending()
@@ -231,7 +231,7 @@ describe('完整流程回归', () => {
   it('走通登录 → 放入 → 诊断 → 生成 → 列表 → 详情', () => {
     const session = useSessionStore()
     expect(session.isLoggedIn).toBe(false)
-    session.login('张三')
+    session.user = { id: 'user-张三', email: '张三@example.com' }; session.status = 'user'
     expect(session.isLoggedIn).toBe(true)
 
     const draftStore = useDraftStore()
@@ -307,12 +307,14 @@ describe('完整流程回归', () => {
     versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
 
     const session = useSessionStore()
-    session.logout()
+    { session.user = null; session.status = 'guest' }
     expect(session.isLoggedIn).toBe(false)
 
-    session.login('张三')
     setActivePinia(createPinia())
-    useSessionStore().restore()
+    // 换了 pinia，登录态要重新设一次——它决定读哪一份简历
+    const restored = useSessionStore()
+    restored.user = { id: 'user-张三', email: 'zhang@example.com' }
+    restored.status = 'user'
     useDraftStore().restore()
     useVersionStore().restore()
 
@@ -538,12 +540,13 @@ describe('操作按钮的形态', () => {
     expect(template).not.toMatch(/<el-form\b/)
     expect(template).not.toMatch(/<el-input\b/)
   })
-  it('身份对话框里没有密码输入项', () => {
-    // 问了一个不校验的密码，就是承诺了做不到的事；身份只要一个名字
+  it('身份对话框里有密码输入项', () => {
+    // 账号是邮箱 + 密码了（account-access 整域重写）：不校验的密码就是
+    // 承诺了做不到的事，所以要有校验——服务端用 scrypt 存哈希。
     const dialog = viewTemplateEntries().find((entry) => entry.name === 'IdentityDialog.vue')
     const template = dialog?.template ?? ''
-    expect(template).not.toMatch(/密码/)
-    expect(template).not.toMatch(/type="password"/)
+    expect(template).toMatch(/密码/)
+    expect(template).toMatch(/type="password"/)
   })
 
   it('简历与版本按用户分槽存放', () => {

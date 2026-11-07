@@ -14,6 +14,12 @@
     "test": "npm --workspace frontend run test",
     "type-check": "npm --workspace frontend run type-check",
     "verify": "npm --workspace frontend run verify && npm --workspace server run verify",
-    "dev:server": "npm --workspace server run dev"
+    "dev:server": "npm --workspace server run dev",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:migrate": "npm --workspace server run db:migrate"
+  },
+  "devDependencies": {
+    "embedded-postgres": "^18.4.0-beta.17"
   }
 }

@@ -27,7 +27,7 @@ const RESUME_VAGUE = `工作经历
 async function mountEditor(resume = RESUME, enterEdit = true) {
   const pinia = createPinia()
   setActivePinia(pinia)
-  useSessionStore().login('张三')
+  { const s = useSessionStore(); s.user = { id: 'user-张三', email: 'zhang@example.com' }; s.status = 'user' }
   const store = useDraftStore()
   store.ingest(resume)
   store.savePending()

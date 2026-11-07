@@ -10,12 +10,15 @@ export interface DemoDataResult {
   failure?: ActiveState
 }
 
-/** 一键复现样例简历与样例 JD，未登录时用演示身份进入。 */
-export function loadDemoData(): DemoDataResult {
+/**
+ * 一键复现样例简历与样例 JD。
+ *
+ * 先在服务端建一个临时账号——演示数据也要落在某个账号下，否则用户看不到
+ * 「自己的简历」是什么样子。账号是临时的，垃圾数据由定时任务清掉。
+ */
+export async function loadDemoData(): Promise<DemoDataResult> {
   const session = useSessionStore()
-  // 始终用演示身份：示例简历落在演示用户的位置，不覆盖用户自己那份。
-  // 这个身份不记住——它不是用户给自己起的名字，不该顶替「上次用过的名字」。
-  session.login('演示用户', { remember: false })
+  await session.loginAsDemo()
 
   const draftStore = useDraftStore()
   draftStore.ingest(SAMPLE_DRAFT_TEXT)

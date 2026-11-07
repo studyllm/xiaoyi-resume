@@ -227,7 +227,8 @@ export interface ResumeVersion {
 
 export interface User {
   id: string
-  username: string
+  /** 邮箱。服务端签发的账号标识不含邮箱的任何片段（ADR-0002 §5）。 */
+  email: string
 }
 
 export interface Session {
