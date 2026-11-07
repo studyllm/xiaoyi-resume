@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 
 import { hashPassword, hashToken, normalizeEmail, verifyPassword } from '../db/store'
-import type { AccountStore } from '../db/store'
+import type { Store } from '../db/store'
 import { sendError } from '../http/errors'
 import {
   TOKEN_TTL_MS,
@@ -19,7 +19,7 @@ import { passwordResetMail, verificationMail } from '../auth/mailer'
 const MIN_PASSWORD_LENGTH = 8
 
 export interface AuthDeps {
-  store: AccountStore
+  store: Store
   mailer: MailSender
   /** 站点对外地址，验证与重置链接指向它。 */
   siteUrl: string

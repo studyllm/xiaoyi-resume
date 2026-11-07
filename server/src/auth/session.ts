@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 import { hashToken } from '../db/store'
-import type { AccountStore, StoredSession, StoredUser } from '../db/store'
+import type { Store, StoredSession, StoredUser } from '../db/store'
 
 /** 会话 cookie 的名字。 */
 export const SESSION_COOKIE = 'session'
@@ -26,7 +26,7 @@ export function randomToken(): string {
  * cookie 是 httpOnly + SameSite=Lax，脚本读不到，跨站请求也不带。
  */
 export async function createSession(
-  store: AccountStore,
+  store: Store,
   userId: string,
   reply: FastifyReply,
 ): Promise<StoredSession> {
@@ -47,7 +47,7 @@ export async function createSession(
 
 /** 读当前请求的会话。没登录或已过期都返回 null。 */
 export async function readSession(
-  store: AccountStore,
+  store: Store,
   request: FastifyRequest,
 ): Promise<StoredSession | null> {
   const token = request.cookies[SESSION_COOKIE]
@@ -66,7 +66,7 @@ export async function readSession(
 
 /** 滑动续期：剩余不足一半时，把到期时间往后推。 */
 export async function renewSession(
-  store: AccountStore,
+  store: Store,
   session: StoredSession,
 ): Promise<void> {
   const remaining = session.expiresAt.getTime() - Date.now()
@@ -81,7 +81,7 @@ export function clearSessionCookie(reply: FastifyReply): void {
 
 /** 取当前请求的登录用户。没登录返回 null。 */
 export async function currentUser(
-  store: AccountStore,
+  store: Store,
   request: FastifyRequest,
 ): Promise<StoredUser | null> {
   const session = await readSession(store, request)

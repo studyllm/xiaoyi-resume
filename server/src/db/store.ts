@@ -1,12 +1,14 @@
 import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 
-import { and, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+
+import type { Draft, ResumeVersion } from '@xiaoyi/shared/domain/types'
 
 import type { VerificationTokenKind } from './schema'
 import * as schema from './schema'
-import { sessions, users, verificationTokens } from './schema'
+import { drafts, sessions, users, verificationTokens, versions } from './schema'
 
 /** Postgres 数据库句柄。 */
 export type PostgresDatabase = NodePgDatabase<typeof schema>
@@ -80,7 +82,7 @@ export interface StoredVerificationToken {
  * 做成接口而不是直接写 SQL：测试用内存实现，生产用 Postgres 实现，
  * 两者行为必须一致（`server/src/db/store.spec.ts` 断言的就是这套语义）。
  */
-export interface AccountStore {
+export interface Store {
   createUser(input: { email: string; passwordHash: string }): Promise<StoredUser>
   findUserByEmail(email: string): Promise<StoredUser | null>
   findUserById(id: string): Promise<StoredUser | null>
@@ -106,6 +108,22 @@ export interface AccountStore {
     tokenHash: string,
   ): Promise<StoredVerificationToken | null>
   deleteVerificationToken(id: string): Promise<void>
+
+  /** 读简历底稿。一账号一份。 */
+  getDraft(userId: string): Promise<{ payload: Draft; revision: number; updatedAt: Date } | null>
+  /** 保存简历底稿。 */
+  saveDraft(input: { userId: string; payload: Draft; revision: number }): Promise<void>
+  /** 版本列表，按生成时间倒序。 */
+  listVersions(userId: string): Promise<Array<{ id: string; payload: ResumeVersion; createdAt: Date }>>
+  /** 存一个版本。 */
+  addVersion(input: {
+    id: string
+    userId: string
+    payload: ResumeVersion
+    createdAt: Date
+  }): Promise<void>
+  /** 删版本。 */
+  deleteVersion(userId: string, id: string): Promise<void>
 }
 
 /** 邮箱规范化：去空白、转小写。登录与注册都用同一套。 */
@@ -114,10 +132,15 @@ export function normalizeEmail(email: string): string {
 }
 
 /** 内存实现。测试用；语义与 Postgres 实现一致。 */
-export function createMemoryStore(): AccountStore {
+export function createMemoryStore(): Store {
   const userRows = new Map<string, StoredUser>()
   const sessionRows = new Map<string, StoredSession>()
   const tokenRows = new Map<string, StoredVerificationToken>()
+  const draftRows = new Map<string, { userId: string; payload: Draft; revision: number; updatedAt: Date }>()
+  const versionRows = new Map<
+    string,
+    { id: string; userId: string; payload: ResumeVersion; createdAt: Date }
+  >()
 
   return {
     async createUser({ email, passwordHash }) {
@@ -189,11 +212,30 @@ export function createMemoryStore(): AccountStore {
     async deleteVerificationToken(id) {
       tokenRows.delete(id)
     },
+
+    async getDraft(userId) {
+      return draftRows.get(userId) ?? null
+    },
+    async saveDraft({ userId, payload, revision }) {
+      draftRows.set(userId, { userId, payload, revision, updatedAt: new Date() })
+    },
+    async listVersions(userId) {
+      return [...versionRows.values()]
+        .filter((row) => row.userId === userId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    },
+    async addVersion({ id, userId, payload, createdAt }) {
+      versionRows.set(id, { id, userId, payload, createdAt })
+    },
+    async deleteVersion(userId, id) {
+      const row = versionRows.get(id)
+      if (row?.userId === userId) versionRows.delete(id)
+    },
   }
 }
 
 /** Postgres 实现。 */
-export function createPostgresStore(db: PostgresDatabase): AccountStore {
+export function createPostgresStore(db: PostgresDatabase): Store {
   return {
     async createUser({ email, passwordHash }) {
       const row: StoredUser = {
@@ -266,6 +308,37 @@ export function createPostgresStore(db: PostgresDatabase): AccountStore {
     },
     async deleteVerificationToken(id) {
       await db.delete(verificationTokens).where(eq(verificationTokens.id, id))
+    },
+
+    async getDraft(userId) {
+      const rows = await db.select().from(drafts).where(eq(drafts.userId, userId)).limit(1)
+      const row = rows[0]
+      return row ? { ...row, payload: row.payload as Draft } : null
+    },
+    async saveDraft({ userId, payload, revision }) {
+      await db
+        .insert(drafts)
+        .values({ userId, payload, revision, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: drafts.userId,
+          set: { payload, revision, updatedAt: new Date() },
+        })
+    },
+    async listVersions(userId) {
+      const rows = await db
+        .select()
+        .from(versions)
+        .where(eq(versions.userId, userId))
+        .orderBy(desc(versions.createdAt))
+      return rows.map((row) => ({ ...row, payload: row.payload as ResumeVersion }))
+    },
+    async addVersion({ id, userId, payload, createdAt }) {
+      await db.insert(versions).values({ id, userId, payload, createdAt })
+    },
+    async deleteVersion(userId, id) {
+      await db
+        .delete(versions)
+        .where(and(eq(versions.id, id), eq(versions.userId, userId)))
     },
   }
 }

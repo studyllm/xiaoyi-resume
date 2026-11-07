@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 /**
  * 数据模型。
@@ -61,6 +61,32 @@ export const verificationTokens = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
   (table) => [index('verification_tokens_lookup_idx').on(table.kind, table.tokenHash)],
+)
+
+/** 简历底稿。一账号一份（计划 T3.7）。 */
+export const drafts = pgTable('drafts', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** 结构化简历，原样存 JSONB——它是树形结构，拆成关系表反而更复杂。 */
+  payload: jsonb('payload').notNull(),
+  /** 每次保存 +1。客户端带它做乐观并发。 */
+  revision: integer('revision').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+})
+
+/** 版本快照。生成之后不可变，也不随底稿改动而回写。 */
+export const versions = pgTable(
+  'versions',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    payload: jsonb('payload').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('versions_user_idx').on(table.userId, table.createdAt)],
 )
 
 export type UserRow = typeof users.$inferSelect

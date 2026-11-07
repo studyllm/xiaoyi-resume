@@ -2,14 +2,15 @@ import cookie from '@fastify/cookie'
 import Fastify, { type FastifyInstance } from 'fastify'
 
 import type { MailSender } from './auth/mailer'
-import type { AccountStore } from './db/store'
+import type { Store } from './db/store'
 import { registerAuthRoutes } from './routes/auth'
 import { registerHealthz } from './routes/healthz'
+import { registerImportRoutes } from './routes/import'
 import { registerParse } from './routes/parse'
 
 export interface AppDeps {
   /** 账号与会话的存取。 */
-  store: AccountStore
+  store: Store
   /** 发信。 */
   mailer: MailSender
   /** 站点对外地址，验证与重置链接指向它。 */
@@ -32,6 +33,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerHealthz(app)
   registerParse(app)
   registerAuthRoutes(app, deps)
+  registerImportRoutes(app, { store: deps.store })
 
   return app
 }
