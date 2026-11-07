@@ -31,6 +31,7 @@ export const ERROR_CODES = {
   LLM_UNAVAILABLE: { http: 503, state: 'llm-unavailable' },
   LLM_TIMEOUT: { http: 504, state: 'llm-timeout' },
   RATE_LIMITED: { http: 429, state: 'rate-limited' },
+  EMAIL_SEND_FAILED: { http: 502, state: 'email-send-failed' },
   STORAGE_UNAVAILABLE: { http: 503, state: 'storage-unavailable' },
   VALIDATION_FAILED: { http: 400, state: 'validation-failed' },
   INTERNAL_ERROR: { http: 500, state: 'internal-error' },

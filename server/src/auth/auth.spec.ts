@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createMemoryMailer } from './mailer'
 import { buildApp } from '../app'
+import { createMemoryIdempotencyStore } from '../db/idempotency'
 import { createMemoryStore } from '../db/store'
 
 const PASSWORD = 'correct horse battery'
@@ -17,6 +18,7 @@ function harness(): Harness {
   const store = createMemoryStore()
   const app = buildApp({
     store,
+    idempotency: createMemoryIdempotencyStore(),
     mailer,
     siteUrl: 'http://localhost:5173',
     from: 'noreply@xiaoyi.example',
