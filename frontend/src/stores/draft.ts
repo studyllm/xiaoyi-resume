@@ -14,7 +14,7 @@ import type {
   DraftProfile,
 } from '@xiaoyi/shared/domain/types'
 import { ApiError } from '@/api/client'
-import { fetchDraft, saveDraft } from '@/api/resume'
+import { fetchDraft, importLocalDraft, saveDraft } from '@/api/resume'
 import { engineContext, useEngines } from './engines'
 import { orderByDocument } from '@xiaoyi/shared/engines/anchor'
 import { findStructureFindings, type StructureFinding } from '@xiaoyi/shared/engines/structure'
@@ -45,6 +45,8 @@ export interface SaveOutcome {
 export const useDraftStore = defineStore('draft', () => {
   const draft = ref<Draft | null>(null)
   const pending = ref<Draft | null>(null)
+  /** 服务端没有、本机还有一份——等用户决定搬还是丢（计划 T3.8）。 */
+  const localCopyAvailable = ref(false)
   const diagnosis = ref<Diagnosis | null>(null)
   /** 最近一次保存时查出来的结构问题。编辑过程中不实时更新。 */
   const structureFindings = ref<StructureFinding[]>([])
@@ -168,7 +170,13 @@ export const useDraftStore = defineStore('draft', () => {
       const notFound =
         error instanceof ApiError && !error.offline && error.code === 'RESUME_NOT_FOUND'
       if (notFound) {
-        // 服务端说没有：本地那份是旧的，清掉
+        // 服务端说没有，但本机可能还有一份旧的——先问用户，不静默清掉
+        const cached = persistence.read<Draft>(draftKey(userId))
+        if (cached) {
+          localCopyAvailable.value = true
+          clear()
+          return
+        }
         persistence.remove(draftKey(userId))
         clear()
         return
@@ -186,6 +194,38 @@ export const useDraftStore = defineStore('draft', () => {
     savedSnapshot.value = cloneDraft(stored)
     dirty.value = false
     seed = resumeIdSeed(collectDraftIds(stored))
+  }
+
+  /**
+   * 把本机那份搬上服务端。
+   *
+   * 搬完服务端那份就是权威，本机这份清掉——留在本地的 PII 残留等于没迁
+   * （`docs/privacy-conclusions.md` §2）。
+   */
+  async function importLocalCopy(): Promise<{ ok: boolean; versions: number }> {
+    const session = useSessionStore()
+    const userId = session.currentUserId
+    if (!userId) return { ok: false, versions: 0 }
+
+    const cached = persistence.read<Draft>(draftKey(userId))
+    if (!cached) {
+      localCopyAvailable.value = false
+      return { ok: false, versions: 0 }
+    }
+
+    const result = await importLocalDraft({ draft: { v: 3, data: cached } })
+    persistence.remove(draftKey(userId))
+    localCopyAvailable.value = false
+    await restore()
+    return { ok: result.draft, versions: result.versions }
+  }
+
+  /** 丢弃本机那份，不搬到服务端。 */
+  function discardLocalCopy(): void {
+    const userId = useSessionStore().currentUserId
+    if (userId) persistence.remove(draftKey(userId))
+    localCopyAvailable.value = false
+    clear()
   }
 
   /** 清空内存里的那份，不留上一个用户的内容。 */
@@ -263,14 +303,13 @@ export const useDraftStore = defineStore('draft', () => {
   }
 
   /** 保存编辑。逐字输入不会调用它。 */
-  async function saveEdits(): Promise<boolean> {
-    if (!draft.value) return false
-    const outcome = await commit({
+  async function saveEdits(): Promise<SaveOutcome> {
+    if (!draft.value) return { ok: false, failure: { state: FAILURE_STATES['nothing-to-save'] } }
+    return commit({
       ...draft.value,
       revision: savedRevision.value + 1,
       updatedAt: new Date().toISOString(),
     })
-    return outcome.ok
   }
 
   /**
@@ -285,7 +324,8 @@ export const useDraftStore = defineStore('draft', () => {
   /** 有未保存的修改时先保存。生成版本、导出 PDF 前会调用。 */
   async function saveIfDirty(): Promise<boolean> {
     if (!dirty.value) return false
-    return saveEdits()
+    const outcome = await saveEdits()
+    return outcome.ok
   }
 
   /** 放弃修改，回到上次保存的内容。 */
@@ -451,6 +491,9 @@ export const useDraftStore = defineStore('draft', () => {
   return {
     draft,
     pending,
+    localCopyAvailable,
+    importLocalCopy,
+    discardLocalCopy,
     diagnosis,
     savedRevision,
     savedSnapshot,

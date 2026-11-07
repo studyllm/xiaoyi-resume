@@ -201,6 +201,11 @@ export const FAILURE_STATES = defineStates({
     title: '删除失败',
     hint: '版本还在。等一会儿再试，或者刷新页面看看。',
   },
+  'local-copy-available': {
+    title: '本机还有一份简历没上传',
+    hint: '搬到账号里，换设备也在；不搬就丢弃。',
+    action: '搬到我的账号',
+  },
   'offline': {
     title: '现在连不上服务器',
     hint: '改动还在这个页面上，等连上再保存。',
