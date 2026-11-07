@@ -4,6 +4,7 @@
 >
 > **可执行形式**：契约的请求、响应与错误码最终落成 TypeBox schema，放在 `packages/shared/contracts/`，前端与服务端引用同一份。`docs/api-contract.md` 是它的**说明**，schema 是它本身。本文档先冻结内容，schema 随服务端落地（见 §11）。
 
+- **落地状态**：21 个端点里**已实现 2 个**（`GET /api/v1/healthz`、`POST /api/v1/draft/parse`），其余随 P3 的后续任务逐个落地。已实现的端点由服务端用例断言与契约一致。
 - **版本**：`/api/v1`
 - **冻结时点**：P3 的第一个任务（T3.1），先于任何服务端代码
 - **相关文档**：`docs/adr/0002-auth-model.md`（鉴权）、`docs/adr/0004-engine-placement.md`（引擎位置）、`docs/adr/0005-llm-access-shape.md`（模型接入）、`docs/privacy-conclusions.md`（数据口径）、`docs/error-taxonomy.md`（状态与文案）
