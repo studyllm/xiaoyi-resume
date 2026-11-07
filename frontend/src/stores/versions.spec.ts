@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Draft } from '@/domain/types'
+import type { Draft } from '@xiaoyi/shared/domain/types'
 import { useDraftStore } from './draft'
 import { useSessionStore } from './session'
 import { useVersionStore } from './versions'

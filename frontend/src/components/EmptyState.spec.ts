@@ -2,7 +2,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
-import { EMPTY_STATES } from '@/domain/states'
+import { EMPTY_STATES } from '@xiaoyi/shared/domain/states'
 import EmptyState from './EmptyState.vue'
 
 describe('EmptyState 的三层结构', () => {

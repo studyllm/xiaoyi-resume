@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import { EMPTY_PROFILE, hasItemHead, type SectionKind } from '@/domain/types'
+import { EMPTY_PROFILE, hasItemHead, type SectionKind } from '@xiaoyi/shared/domain/types'
 
 export interface PreviewBullet {
   id: string

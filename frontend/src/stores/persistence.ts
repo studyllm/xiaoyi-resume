@@ -1,4 +1,4 @@
-import { EMPTY_PROFILE, type Draft, type ResumeVersion, type SectionKind } from '@/domain/types'
+import { EMPTY_PROFILE, type Draft, type ResumeVersion, type SectionKind } from '@xiaoyi/shared/domain/types'
 
 export interface StorageAdapter {
   getItem(key: string): string | null

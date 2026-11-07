@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Draft } from '@/domain/types'
+import type { Draft } from '@xiaoyi/shared/domain/types'
 import {
   createPersistence,
   draftKey,

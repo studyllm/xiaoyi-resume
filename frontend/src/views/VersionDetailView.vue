@@ -5,9 +5,9 @@ import { CopyDocument, Download } from '@element-plus/icons-vue'
 
 import EmptyState from '@/components/EmptyState.vue'
 import ResumePreview from '@/components/ResumePreview.vue'
-import type { DiffEntry, ResumeVersion, SectionKind } from '@/domain/types'
-import { renderMarkdown } from '@/engines/markdown'
-import { FAILURE_STATES, stateHint, stateMessage, stateTitle } from '@/domain/states'
+import type { DiffEntry, ResumeVersion, SectionKind } from '@xiaoyi/shared/domain/types'
+import { renderMarkdown } from '@xiaoyi/shared/engines/markdown'
+import { FAILURE_STATES, stateHint, stateMessage, stateTitle } from '@xiaoyi/shared/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { useVersionStore } from '@/stores/versions'
 

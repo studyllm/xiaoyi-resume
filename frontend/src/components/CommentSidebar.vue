@@ -7,15 +7,15 @@ import DiagnosisComment from '@/components/DiagnosisComment.vue'
 import SidebarEmpty from '@/components/SidebarEmpty.vue'
 import SidebarFilters from '@/components/SidebarFilters.vue'
 import StructureFindingsPanel from '@/components/StructureFindingsPanel.vue'
-import type { EmptyState } from '@/domain/states'
+import type { EmptyState } from '@xiaoyi/shared/domain/states'
 import {
   SEVERITY_LABELS,
   type DiagnosisCategory,
   type DiagnosisIssue,
   type DiagnosisState,
   type Severity,
-} from '@/domain/types'
-import type { StructureFinding } from '@/engines/structure'
+} from '@xiaoyi/shared/domain/types'
+import type { StructureFinding } from '@xiaoyi/shared/engines/structure'
 import { useUiStore } from '@/stores/ui'
 
 const props = withDefaults(

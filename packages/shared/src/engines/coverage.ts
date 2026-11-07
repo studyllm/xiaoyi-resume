@@ -1,4 +1,4 @@
-import type { Draft, Jd, SectionKind } from '@/domain/types'
+import type { Draft, Jd, SectionKind } from '../domain/types'
 import { findEntryByTerm, matchCatalog } from './catalog'
 import { extractCorePhrases } from './jd'
 import { hasResultSignal } from './signals'

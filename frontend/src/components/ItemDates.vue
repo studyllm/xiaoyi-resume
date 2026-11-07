@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { YearMonth } from '@/domain/time'
+import type { YearMonth } from '@xiaoyi/shared/domain/time'
 
 defineProps<{
   start?: YearMonth | null

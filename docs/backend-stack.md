@@ -45,19 +45,27 @@ P3 服务端化的技术选型。**决策记录在 ADR 里，这份文档是总�
 ## 3. 目录结构
 
 ```
-packages/shared/          domain/ + engines/（除 pdfText.ts）
-  domain/                 types / time / ids / sectionFields / states / breakpoints
-  engines/                parseDraft / diagnose / jd / generateVersion / …
-
-apps/frontend/            现在的 frontend/
-apps/server/              Node 服务
+frontend/                 前端应用（**留在根目录，不搬**）
+  src/pdf/                浏览器专属：pdf.js 提取 PDF 文字层
+server/                   Node 服务（P3 起）
   src/routes/             路由与 TypeBox schema（契约在这里）
   src/db/                 Drizzle schema 与迁移
   src/auth/               会话、密码、邮件
   src/engines/            ResumeEngines 的远端实现（包一层 HTTP）
 
+packages/shared/          npm workspace，包名 @xiaoyi/shared
+  src/domain/             types / time / ids / sectionFields / states / breakpoints
+  src/engines/            parseDraft / diagnose / jd / generateVersion / …
+  src/contracts/          错误码表与请求响应 schema
+
 docs/api-contract.md      契约的**说明**（代码才是契约本身）
 ```
+
+**`frontend/` 留在根目录。** 搬目录会让 CLAUDE.md、CI 工作流、README 与每一个 import 路径失效，纯粹的无谓返工，而且会和每一个在开的 PR 撞车。
+
+**共享包用包名解析，不用路径别名。** `@xiaoyi/shared/domain/types` 由 npm workspace 解析——包边界**由解析器强制**：服务端引用不到前端的东西，前端也引用不到服务端的。走别名的话那只是约定，约定会被绕过。
+
+**依赖装在仓库根**（npm workspace 会提升），lockfile 也在根目录，`frontend/node_modules` 不存在。
 
 `pdfText.ts` 留在前端——PDF 提取是浏览器能力，且 P1 承诺过文件不上传。
 

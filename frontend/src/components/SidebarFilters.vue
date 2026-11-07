@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CATEGORY_LABELS, type DiagnosisCategory } from '@/domain/types'
+import { CATEGORY_LABELS, type DiagnosisCategory } from '@xiaoyi/shared/domain/types'
 
 defineProps<{
   severity: string

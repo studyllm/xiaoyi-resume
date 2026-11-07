@@ -2,8 +2,8 @@
 import { computed } from 'vue'
 import { EditPen, Check, Close, Hide } from '@element-plus/icons-vue'
 
-import { CATEGORY_LABELS, SEVERITY_LABELS, type DiagnosisIssue } from '@/domain/types'
-import { anchorText } from '@/engines/anchor'
+import { CATEGORY_LABELS, SEVERITY_LABELS, type DiagnosisIssue } from '@xiaoyi/shared/domain/types'
+import { anchorText } from '@xiaoyi/shared/engines/anchor'
 
 const props = defineProps<{
   issue: DiagnosisIssue

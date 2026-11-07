@@ -22,6 +22,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // 共享包不走别名：@xiaoyi/shared 由 npm workspace 解析，
+      // 包边界由解析器强制——server 引用不到 frontend 的东西。
     },
   },
   server: {
@@ -29,7 +31,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.spec.ts'],
+    // 共享包的用例跟着源码走——它们测的是前后端共用的那份逻辑
+    include: ['src/**/*.spec.ts', '../packages/shared/src/**/*.spec.ts'],
     // 单个用例实测最长约 2.2s，30s 是 13 倍余量。默认 5s 在机器负载升高时
     // 会把排队造成的等待误判成失败，让「全绿」失去证据意义。
     testTimeout: 30000,

@@ -1,4 +1,4 @@
-import { FAILURE_STATES, WARNING_STATES, stateMessage, type StateCopy } from '@/domain/states'
+import { FAILURE_STATES, WARNING_STATES, stateMessage, type StateCopy } from '@xiaoyi/shared/domain/states'
 
 /**
  * 提取结果的文字质量。

@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
-import { FAILURE_STATES, stateMessage } from '@/domain/states'
+import { FAILURE_STATES, stateMessage } from '@xiaoyi/shared/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
 import { useUiStore } from '@/stores/ui'

@@ -4,8 +4,8 @@ import { useRouter } from 'vue-router'
 import { CopyDocument, Delete, Document, Download, Plus, View } from '@element-plus/icons-vue'
 
 import EmptyState from '@/components/EmptyState.vue'
-import { maskForbiddenWords } from '@/engines/forbidden'
-import { EMPTY_STATES, FAILURE_STATES, stateHint, stateMessage } from '@/domain/states'
+import { maskForbiddenWords } from '@xiaoyi/shared/engines/forbidden'
+import { EMPTY_STATES, FAILURE_STATES, stateHint, stateMessage } from '@xiaoyi/shared/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { useVersionStore } from '@/stores/versions'
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { createIdSeed } from '@/domain/ids'
-import type { Draft, DraftItem, SectionKind } from '@/domain/types'
-import { SECTION_ORDER, SECTION_TITLES } from '@/domain/types'
+import { createIdSeed } from '../domain/ids'
+import type { Draft, DraftItem, SectionKind } from '../domain/types'
+import { SECTION_ORDER, SECTION_TITLES } from '../domain/types'
 import { generateVersion } from './generateVersion'
 import { parseDraft } from './parseDraft'
 

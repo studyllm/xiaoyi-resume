@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { DiagnosisIssue, Draft } from '@/domain/types'
-import { SECTION_ORDER, SECTION_TITLES } from '@/domain/types'
+import type { DiagnosisIssue, Draft } from '@xiaoyi/shared/domain/types'
+import { SECTION_ORDER, SECTION_TITLES } from '@xiaoyi/shared/domain/types'
 import ResumeEditor from './ResumeEditor.vue'
 
 function makeDraft(): Draft {

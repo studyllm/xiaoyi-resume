@@ -1,4 +1,4 @@
-import type { DraftItem, DraftProfile, Jd, UncoveredRequirement, VersionSection } from '@/domain/types'
+import type { DraftItem, DraftProfile, Jd, UncoveredRequirement, VersionSection } from '../domain/types'
 import type { CoverageTier, RequirementCoverage } from './types'
 
 export function tierRank(tier: CoverageTier): number {

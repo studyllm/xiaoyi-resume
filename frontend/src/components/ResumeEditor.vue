@@ -3,11 +3,11 @@ import { computed, nextTick, ref, watch } from 'vue'
 
 import PaperField from '@/components/PaperField.vue'
 import ResumePreview, { type PreviewHighlight } from '@/components/ResumePreview.vue'
-import { collectDraftIds, resumeIdSeed } from '@/domain/ids'
-import { SECTION_FIELD_WORDS } from '@/domain/sectionFields'
-import { anchorText } from '@/engines/anchor'
-import { addSkillRow, applyOp, isEmptyItem } from '@/engines/editing'
-import { hasItemHead, type DiagnosisIssue, type Draft, type DraftProfile, type SectionKind } from '@/domain/types'
+import { collectDraftIds, resumeIdSeed } from '@xiaoyi/shared/domain/ids'
+import { SECTION_FIELD_WORDS } from '@xiaoyi/shared/domain/sectionFields'
+import { anchorText } from '@xiaoyi/shared/engines/anchor'
+import { addSkillRow, applyOp, isEmptyItem } from '@xiaoyi/shared/engines/editing'
+import { hasItemHead, type DiagnosisIssue, type Draft, type DraftProfile, type SectionKind } from '@xiaoyi/shared/domain/types'
 
 /** 外部让编辑器定位到某个地方。 */
 export type EditorFocusTarget =

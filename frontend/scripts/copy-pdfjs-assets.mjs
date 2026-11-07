@@ -7,12 +7,22 @@
 //
 // 为什么不从 CDN 取：产品不依赖网络。资源随构建产物一起发布。
 import { cp, mkdir } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const source = resolve(frontendRoot, 'node_modules/pdfjs-dist')
+const repoRoot = resolve(frontendRoot, '..')
+// 依赖装在仓库根（npm workspace 会把依赖提升到根目录），但也容许装在 frontend 下面。
+const source = [frontendRoot, repoRoot]
+  .map((root) => resolve(root, 'node_modules/pdfjs-dist'))
+  .find((candidate) => existsSync(candidate))
 const target = resolve(frontendRoot, 'public/pdfjs')
+
+if (!source) {
+  console.error('找不到 pdfjs-dist：先跑一次 npm install')
+  process.exit(1)
+}
 
 const directories = ['cmaps', 'standard_fonts']
 

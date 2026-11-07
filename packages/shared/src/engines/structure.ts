@@ -1,7 +1,7 @@
-import type { Draft, SectionKind, Severity } from '@/domain/types'
-import { hasItemHead, SECTION_ORDER } from '@/domain/types'
-import { SECTION_FIELD_WORDS } from '@/domain/sectionFields'
-import { compareYearMonth, rangesOverlap } from '@/domain/time'
+import type { Draft, SectionKind, Severity } from '../domain/types'
+import { hasItemHead, SECTION_ORDER } from '../domain/types'
+import { SECTION_FIELD_WORDS } from '../domain/sectionFields'
+import { compareYearMonth, rangesOverlap } from '../domain/time'
 
 /**
  * 结构类问题只有这一处判断。诊断意见与纸面上的结构标注都从这里取，

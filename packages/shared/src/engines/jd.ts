@@ -1,5 +1,5 @@
-import { createIdSeed, type IdSeed } from '@/domain/ids'
-import type { Jd, JdRequirement, RoleNameSource } from '@/domain/types'
+import { createIdSeed, type IdSeed } from '../domain/ids'
+import type { Jd, JdRequirement, RoleNameSource } from '../domain/types'
 import { matchCatalog } from './catalog'
 import { findForbiddenWords } from './forbidden'
 import { normalizeText } from './textUtils'

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { EMPTY_STATES, type EmptyState } from '@/domain/states'
+import { EMPTY_STATES, type EmptyState } from '@xiaoyi/shared/domain/states'
 
 defineProps<{
   /** 状态表里的哪一条空状态。 */

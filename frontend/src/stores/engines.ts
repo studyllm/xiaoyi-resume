@@ -1,5 +1,5 @@
-import { mockEngines } from '@/engines/mockEngines'
-import type { EngineContext, ResumeEngines } from '@/engines/types'
+import { mockEngines } from '@xiaoyi/shared/engines/mockEngines'
+import type { EngineContext, ResumeEngines } from '@xiaoyi/shared/engines/types'
 
 const ENGINE_VERSION = 'mock-0.1.0'
 

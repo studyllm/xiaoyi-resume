@@ -7,7 +7,7 @@ import BrandLogo from '@/components/BrandLogo.vue'
 import ResumePreview, { type PreviewHighlight } from '@/components/ResumePreview.vue'
 import { SHOWCASE_COMMENTS, SHOWCASE_FRAGMENT_SECTIONS } from '@/mock/showcase'
 import { loadDemoData } from '@/mock/loadDemo'
-import { FAILURE_STATES, stateMessage } from '@/domain/states'
+import { FAILURE_STATES, stateMessage } from '@xiaoyi/shared/domain/states'
 import { useDraftStore } from '@/stores/draft'
 
 const router = useRouter()

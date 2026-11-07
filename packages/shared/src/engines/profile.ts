@@ -1,5 +1,5 @@
-import type { DraftProfile } from '@/domain/types'
-import { extractDateRange } from '@/domain/time'
+import type { DraftProfile } from '../domain/types'
+import { extractDateRange } from '../domain/time'
 
 const HEADLINE_LABELS = ['求职意向', '意向', '期望职位', '求职方向', '个人简介', '简介', '一句话', '定位']
 

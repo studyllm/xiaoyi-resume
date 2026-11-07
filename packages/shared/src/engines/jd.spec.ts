@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createIdSeed } from '@/domain/ids'
+import { createIdSeed } from '../domain/ids'
 import { extractCorePhrases, parseJd } from './jd'
 
 const CTX = { now: '2026-01-01T00:00:00.000Z', engineVersion: 'test' }

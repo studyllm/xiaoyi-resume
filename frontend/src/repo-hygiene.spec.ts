@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import { findForbiddenWords } from '@/engines/forbidden'
+import { findForbiddenWords } from '@xiaoyi/shared/engines/forbidden'
 
 // 本文件在 frontend/src/ 下，仓库根在其上两层
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')

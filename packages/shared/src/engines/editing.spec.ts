@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Draft } from '@/domain/types'
-import { SECTION_ORDER, SECTION_TITLES } from '@/domain/types'
+import type { Draft } from '../domain/types'
+import { SECTION_ORDER, SECTION_TITLES } from '../domain/types'
 import { addSkillRow, applyOp, isEmptyItem } from './editing'
 
 function makeDraft(): Draft {

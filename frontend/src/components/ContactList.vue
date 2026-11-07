@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Delete } from '@element-plus/icons-vue'
 
-import type { DraftContact } from '@/domain/types'
+import type { DraftContact } from '@xiaoyi/shared/domain/types'
 
 defineProps<{
   contacts: DraftContact[]
