@@ -114,6 +114,21 @@ schema 版本号与迁移链沿用 `stores/persistence.ts` 现成的「版本号
 
 **全部自管**（用户决定）：一台 VPS + Docker Compose，应用容器与 Postgres 容器同机。
 
+### 6.0 本地环境
+
+`docker-compose.yml` 起一个 Postgres（单实例，与生产的假设一致）：
+
+```bash
+npm run db:up          # 起 Postgres（127.0.0.1:5432）
+npm run db:migrate     # 跑迁移 SQL
+npm run dev:server     # 服务端（读 DATABASE_URL 等环境变量）
+```
+
+**测试不需要 Postgres。** `server/src/db/postgres.spec.ts` 用 `embedded-postgres`
+在临时目录里起一个**真 Postgres**（二进制随 npm 装，平台包自动解析），
+对着它跑迁移 SQL 与全部存储用例。这样 CI 不需要起服务容器，
+「schema 与迁移 SQL 对不对」这件事也不会只靠接口层的语义测试。
+
 ### 6.1 备份
 
 | 项 | 定法 |

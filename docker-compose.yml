@@ -1,0 +1,25 @@
+# 本地开发环境：数据库 + 服务端。
+#
+# 数据库全部自管（ADR-0002 与 docs/privacy-conclusions.md §4.2）：
+# 单实例、不做多副本。备份由 scripts/backup.sh 负责，产物发到对象存储。
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: xiaoyi-postgres
+    environment:
+      POSTGRES_USER: xiaoyi
+      POSTGRES_PASSWORD: xiaoyi_local_dev
+      POSTGRES_DB: xiaoyi
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # 迁移要等数据库真的能连上，不是容器刚起来
+      test: ['CMD-SHELL', 'pg_isready -U xiaoyi -d xiaoyi']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres-data:
