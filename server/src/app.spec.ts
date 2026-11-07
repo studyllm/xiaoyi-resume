@@ -93,3 +93,37 @@ describe('服务端', () => {
     expect(body.otherHeaders).toEqual(direct.otherHeaders)
   })
 })
+
+describe('可观测', () => {
+  it('响应里带请求 id，用户报错时能报给我们', async () => {
+    const app = buildApp({
+      store: createMemoryStore(),
+      mailer: createMemoryMailer(),
+      siteUrl: 'http://localhost:5173',
+      from: 'noreply@xiaoyi.example',
+      idempotency: createMemoryIdempotencyStore(),
+      log: false,
+    })
+
+    const response = await app.inject({ method: 'GET', url: '/api/v1/healthz' })
+    expect(response.headers['x-request-id']).toBeTruthy()
+  })
+
+  it('客户端带了请求 id 就用它，方便跨服务追踪', async () => {
+    const app = buildApp({
+      store: createMemoryStore(),
+      mailer: createMemoryMailer(),
+      siteUrl: 'http://localhost:5173',
+      from: 'noreply@xiaoyi.example',
+      idempotency: createMemoryIdempotencyStore(),
+      log: false,
+    })
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/healthz',
+      headers: { 'x-request-id': 'req-from-client' },
+    })
+    expect(response.headers['x-request-id']).toBe('req-from-client')
+  })
+})
