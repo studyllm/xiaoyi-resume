@@ -7,6 +7,7 @@ import { registerAuthRoutes } from './routes/auth'
 import { registerHealthz } from './routes/healthz'
 import { registerImportRoutes } from './routes/import'
 import { registerParse } from './routes/parse'
+import { registerResumeRoutes } from './routes/resume'
 
 export interface AppDeps {
   /** 账号与会话的存取。 */
@@ -34,6 +35,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerParse(app)
   registerAuthRoutes(app, deps)
   registerImportRoutes(app, { store: deps.store })
+  registerResumeRoutes(app, { store: deps.store })
 
   return app
 }

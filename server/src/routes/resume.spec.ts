@@ -1,0 +1,192 @@
+import { describe, expect, it } from 'vitest'
+
+import { createMemoryMailer } from '../auth/mailer'
+import { buildApp } from '../app'
+import { createMemoryStore } from '../db/store'
+
+const PASSWORD = 'correct horse battery'
+
+const DRAFT = {
+  id: 'draft-1',
+  userId: '',
+  revision: 1,
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  profile: { name: '张三', headline: '前端工程师', contacts: [] },
+  sections: [],
+}
+
+function versionOf(id: string, name: string) {
+  return {
+    id,
+    userId: '',
+    name,
+    body: '工作经历',
+    sections: [],
+    diff: [],
+    uncovered: [],
+    coverage: [],
+    integrity: { checked: 0, violations: [] },
+    engineVersion: 'x',
+    jdRawText: '',
+    jdRoleName: '',
+    draftRevision: 1,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    profile: { name: '张三', headline: '', contacts: [] },
+  }
+}
+
+function harness() {
+  const store = createMemoryStore()
+  const mailer = createMemoryMailer()
+  const app = buildApp({
+    store,
+    mailer,
+    siteUrl: 'http://localhost:5173',
+    from: 'noreply@xiaoyi.example',
+  })
+  return { app, store, mailer }
+}
+
+async function login(h: ReturnType<typeof harness>): Promise<string> {
+  await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/register',
+    payload: { email: 'someone@example.com', password: PASSWORD },
+  })
+  const token = /token=([^\s&]+)/.exec(h.mailer.sent[0]!.text)![1]!
+  await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/verify-email',
+    payload: { token: decodeURIComponent(token) },
+  })
+  const response = await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/login',
+    payload: { email: 'someone@example.com', password: PASSWORD },
+  })
+  return response.cookies[0]!.value
+}
+
+describe('简历与版本的端点', () => {
+  it('未登录时一律拒绝', async () => {
+    const { app } = harness()
+    for (const [method, url] of [
+      ['GET', '/api/v1/draft'],
+      ['PUT', '/api/v1/draft'],
+      ['GET', '/api/v1/versions'],
+      ['GET', '/api/v1/versions/x'],
+      ['DELETE', '/api/v1/versions/x'],
+    ] as const) {
+      const response = await app.inject({ method, url, payload: method === 'PUT' ? { draft: DRAFT } : undefined })
+      expect(response.statusCode, url).toBe(401)
+    }
+  })
+
+  it('没有底稿时给出「没有简历」那一条', async () => {
+    const h = harness()
+    const cookie = await login(h)
+    const response = await h.app.inject({ method: 'GET', url: '/api/v1/draft', cookies: { session: cookie } })
+    expect(response.statusCode).toBe(404)
+    expect(response.json().error.code).toBe('RESUME_NOT_FOUND')
+  })
+
+  it('保存底稿后修订号递增', async () => {
+    const h = harness()
+    const cookie = await login(h)
+
+    const first = await h.app.inject({
+      method: 'PUT',
+      url: '/api/v1/draft',
+      cookies: { session: cookie },
+      payload: { draft: DRAFT },
+    })
+    expect(first.statusCode).toBe(200)
+    expect(first.json().revision).toBe(1)
+
+    const read = await h.app.inject({ method: 'GET', url: '/api/v1/draft', cookies: { session: cookie } })
+    expect(read.json().draft.profile.name).toBe('张三')
+    expect(read.json().revision).toBe(1)
+  })
+
+  it('修订号对不上时拒绝覆盖', async () => {
+    const h = harness()
+    const cookie = await login(h)
+    await h.app.inject({
+      method: 'PUT',
+      url: '/api/v1/draft',
+      cookies: { session: cookie },
+      payload: { draft: DRAFT },
+    })
+
+    const stale = await h.app.inject({
+      method: 'PUT',
+      url: '/api/v1/draft',
+      cookies: { session: cookie },
+      headers: { 'if-match': '0' },
+      payload: { draft: DRAFT },
+    })
+    expect(stale.statusCode).toBe(409)
+    expect(stale.json().error.code).toBe('DRAFT_REVISION_CONFLICT')
+  })
+
+  it('版本列表分页，条目是摘要不含正文', async () => {
+    const h = harness()
+    const cookie = await login(h)
+    const user = await h.store.findUserByEmail('someone@example.com')
+    await h.store.addVersion({ id: 'v1', userId: user!.id, payload: versionOf('v1', '第一个'), createdAt: new Date('2026-01-01T00:00:00.000Z') })
+    await h.store.addVersion({ id: 'v2', userId: user!.id, payload: versionOf('v2', '第二个'), createdAt: new Date('2026-06-01T00:00:00.000Z') })
+
+    const response = await h.app.inject({
+      method: 'GET',
+      url: '/api/v1/versions?page=1&pageSize=1',
+      cookies: { session: cookie },
+    })
+    const body = response.json()
+    expect(body.total).toBe(2)
+    expect(body.items).toHaveLength(1)
+    expect(body.items[0].id).toBe('v2')
+    expect(body.items[0].body).toBeUndefined()
+  })
+
+  it('别人的版本看不见', async () => {
+    const h = harness()
+    const cookie = await login(h)
+    const user = await h.store.findUserByEmail('someone@example.com')
+    const other = await h.store.createUser({ email: 'other@example.com', passwordHash: 'x' })
+    await h.store.addVersion({ id: 'v-other', userId: other.id, payload: versionOf('v-other', '别人的'), createdAt: new Date() })
+
+    const response = await h.app.inject({ method: 'GET', url: '/api/v1/versions', cookies: { session: cookie } })
+    expect(response.json().total).toBe(0)
+    void user
+  })
+
+  it('取版本正文与删版本', async () => {
+    const h = harness()
+    const cookie = await login(h)
+    const user = await h.store.findUserByEmail('someone@example.com')
+    await h.store.addVersion({ id: 'v1', userId: user!.id, payload: versionOf('v1', '第一个'), createdAt: new Date() })
+
+    const body = await h.app.inject({
+      method: 'GET',
+      url: '/api/v1/versions/v1/body?format=markdown',
+      cookies: { session: cookie },
+    })
+    expect(body.json().format).toBe('markdown')
+
+    const missing = await h.app.inject({
+      method: 'GET',
+      url: '/api/v1/versions/nope',
+      cookies: { session: cookie },
+    })
+    expect(missing.statusCode).toBe(404)
+    expect(missing.json().error.code).toBe('VERSION_NOT_FOUND')
+
+    const removed = await h.app.inject({
+      method: 'DELETE',
+      url: '/api/v1/versions/v1',
+      cookies: { session: cookie },
+    })
+    expect(removed.statusCode).toBe(204)
+    expect(await h.store.listVersions(user!.id)).toHaveLength(0)
+  })
+})
