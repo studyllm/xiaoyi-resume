@@ -2,7 +2,19 @@ import { describe, expect, it } from 'vitest'
 
 import { createIdSeed } from '@xiaoyi/shared/domain/ids'
 import { parseDraft } from '@xiaoyi/shared/engines/parseDraft'
+import { createMemoryMailer } from './auth/mailer'
 import { buildApp } from './app'
+import { createMemoryStore } from './db/store'
+
+/** 测试用的应用：内存存储 + 内存发信器。 */
+function testApp() {
+  return buildApp({
+    store: createMemoryStore(),
+    mailer: createMemoryMailer(),
+    siteUrl: 'http://localhost:5173',
+    from: 'noreply@xiaoyi.example',
+  })
+}
 
 const SAMPLE = `张三
 前端工程师
@@ -15,7 +27,7 @@ const SAMPLE = `张三
 
 describe('服务端', () => {
   it('健康检查可用', async () => {
-    const app = buildApp()
+    const app = testApp()
     const response = await app.inject({ method: 'GET', url: '/api/v1/healthz' })
 
     expect(response.statusCode).toBe(200)
@@ -23,7 +35,7 @@ describe('服务端', () => {
   })
 
   it('解析简历正文', async () => {
-    const app = buildApp()
+    const app = testApp()
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/draft/parse',
@@ -37,7 +49,7 @@ describe('服务端', () => {
   })
 
   it('正文为空时给出可执行的下一步', async () => {
-    const app = buildApp()
+    const app = testApp()
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/draft/parse',
@@ -55,7 +67,7 @@ describe('服务端', () => {
    * 到服务端，或者让服务端走了另一套实现，这条会立刻红。
    */
   it('解析结果与直接调用共享引擎逐字一致', async () => {
-    const app = buildApp()
+    const app = testApp()
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/draft/parse',
