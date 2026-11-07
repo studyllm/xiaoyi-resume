@@ -12,7 +12,8 @@
     "type-check": "tsc --noEmit -p tsconfig.json",
     "verify": "npm run type-check && npm run test",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "dev:embedded": "tsx scripts/dev.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.5",
