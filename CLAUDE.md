@@ -34,6 +34,9 @@ packages/shared/    前后端共享的那份源码（npm workspace，@xiaoyi/sha
   src/engines/      规则引擎：解析、诊断、JD 解析、版本生成、批注锚定、禁用词
   src/contracts/    契约：错误码表与请求响应 schema
 server/       服务端（Node 工作区，P3 起）
+  src/routes/ 路由（契约在这里）
+  src/app.ts  组装应用
+  src/index.ts 启动
 openspec/     规格（specs/ 为当前生效规格，changes/archive 为历史变更）
 docs/         产品需求文档
 ```
@@ -361,6 +364,11 @@ npm run test         # 跑全部测试（vitest run，含共享包的用例）
 npm run test:watch   # 监听模式
 npm run type-check   # vue-tsc 类型检查
 npm run build        # 类型检查 + 构建
+
+cd ../server
+npm run dev          # 服务端 http://127.0.0.1:3000
+npm run test         # 服务端用例
+npm run type-check   # tsc 类型检查
 ```
 
-改动后至少跑 `npm run type-check` 与 `npm run test`；涉及界面改动的还要在浏览器里实际走一遍黄金路径与边界情况。
+改动后至少跑 `npm run type-check` 与 `npm run test`；涉及界面改动的还要在浏览器里实际走一遍黄金路径与边界情况。**仓库根的 `npm run verify` 跑两端**——前端与后端都绿才算数。
