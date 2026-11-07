@@ -72,7 +72,14 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps): void {
       tokenHash: hashToken(token),
       expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
     })
-    await mailer.send(verificationMail(mailConfig, user.email, token))
+    try {
+      await mailer.send(verificationMail(mailConfig, user.email, token))
+    } catch {
+      // 邮件没发出去就把账号删掉——留一个用户激活不了的账号，
+      // 用户重试还会撞上「邮箱已注册」。
+      await store.deleteUser(user.id)
+      return sendError(reply, 'EMAIL_SEND_FAILED')
+    }
 
     // 注册成功不建立会话——邮箱没验证前不能登录（ADR-0002 §2）
     return reply.code(201).send({ email: user.email, verificationRequired: true })

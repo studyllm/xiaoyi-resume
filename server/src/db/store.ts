@@ -87,6 +87,8 @@ export interface Store {
   findUserByEmail(email: string): Promise<StoredUser | null>
   findUserById(id: string): Promise<StoredUser | null>
   markEmailVerified(userId: string): Promise<void>
+  /** 删账号。发验证邮件失败时用来回滚——不留一个用户激活不了的账号。 */
+  deleteUser(userId: string): Promise<void>
   setPasswordHash(userId: string, passwordHash: string): Promise<void>
 
   createSession(input: { id: string; userId: string; expiresAt: Date }): Promise<void>
@@ -167,6 +169,15 @@ export function createMemoryStore(): Store {
     async markEmailVerified(userId) {
       const row = userRows.get(userId)
       if (row) row.emailVerifiedAt = new Date()
+    },
+    async deleteUser(userId) {
+      userRows.delete(userId)
+      for (const [id, row] of sessionRows) {
+        if (row.userId === userId) sessionRows.delete(id)
+      }
+      for (const [id, row] of tokenRows) {
+        if (row.userId === userId) tokenRows.delete(id)
+      }
     },
     async setPasswordHash(userId, passwordHash) {
       const row = userRows.get(userId)
@@ -261,6 +272,9 @@ export function createPostgresStore(db: PostgresDatabase): Store {
         .update(users)
         .set({ emailVerifiedAt: new Date() })
         .where(eq(users.id, userId))
+    },
+    async deleteUser(userId) {
+      await db.delete(users).where(eq(users.id, userId))
     },
     async setPasswordHash(userId, passwordHash) {
       await db.update(users).set({ passwordHash }).where(eq(users.id, userId))

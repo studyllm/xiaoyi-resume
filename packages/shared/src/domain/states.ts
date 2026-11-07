@@ -192,6 +192,11 @@ export const FAILURE_STATES = defineStates({
     hint: '这次先用规则引擎生成，或者稍后再试。',
     code: 'LLM_TIMEOUT',
   },
+  'email-send-failed': {
+    title: '验证邮件没发出去',
+    hint: '账号还没建好，等一会儿再试一次。',
+    code: 'EMAIL_SEND_FAILED',
+  },
   'rate-limited': {
     title: '操作太频繁了',
     hint: '等一会儿再试。',

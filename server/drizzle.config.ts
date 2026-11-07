@@ -10,4 +10,8 @@ export default defineConfig({
   schema: './src/db/schema.ts',
   out: './src/db/migrations',
   dialect: 'postgresql',
+  // 迁移要连上真库。连接串来自环境变量，密钥不进代码库。
+  dbCredentials: {
+    url: process.env.DATABASE_URL ?? 'postgres://xiaoyi:xiaoyi_local_dev@127.0.0.1:5432/xiaoyi',
+  },
 })
