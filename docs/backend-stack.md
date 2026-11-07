@@ -45,19 +45,24 @@ P3 服务端化的技术选型。**决策记录在 ADR 里，这份文档是总�
 ## 3. 目录结构
 
 ```
-packages/shared/          domain/ + engines/（除 pdfText.ts）
-  domain/                 types / time / ids / sectionFields / states / breakpoints
-  engines/                parseDraft / diagnose / jd / generateVersion / …
-
-apps/frontend/            现在的 frontend/
-apps/server/              Node 服务
+frontend/                 现在的应用（**留在根目录，不搬**）
+  src/domain/             → 归入 packages/shared（见下）
+  src/engines/            → 归入 packages/shared（见下）
+server/                   Node 服务
   src/routes/             路由与 TypeBox schema（契约在这里）
   src/db/                 Drizzle schema 与迁移
   src/auth/               会话、密码、邮件
   src/engines/            ResumeEngines 的远端实现（包一层 HTTP）
 
+packages/shared/          domain/ + engines/（除 pdfText.ts）+ contracts/
+  domain/                 types / time / ids / sectionFields / states / breakpoints
+  engines/                parseDraft / diagnose / jd / generateVersion / …
+  contracts/              TypeBox schema：请求、响应、错误码
+
 docs/api-contract.md      契约的**说明**（代码才是契约本身）
 ```
+
+**`frontend/` 留在根目录。** 根 `package.json` 用 workspaces 声明 `["frontend", "server", "packages/shared"]`——npm 不在乎 workspace 根在哪。搬目录会让 CLAUDE.md、CI 工作流、README 与每一个 import 路径失效，纯粹的无谓返工，而且会和每一个在开的 PR 撞车。
 
 `pdfText.ts` 留在前端——PDF 提取是浏览器能力，且 P1 承诺过文件不上传。
 
