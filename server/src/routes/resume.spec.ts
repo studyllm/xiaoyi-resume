@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createMemoryMailer } from '../auth/mailer'
 import { buildApp } from '../app'
+import { createMemoryIdempotencyStore } from '../db/idempotency'
 import { createMemoryStore } from '../db/store'
 
 const PASSWORD = 'correct horse battery'
@@ -40,6 +41,7 @@ function harness() {
   const mailer = createMemoryMailer()
   const app = buildApp({
     store,
+    idempotency: createMemoryIdempotencyStore(),
     mailer,
     siteUrl: 'http://localhost:5173',
     from: 'noreply@xiaoyi.example',
@@ -188,5 +190,92 @@ describe('简历与版本的端点', () => {
     })
     expect(removed.statusCode).toBe(204)
     expect(await h.store.listVersions(user!.id)).toHaveLength(0)
+  })
+})
+
+describe('生成版本', () => {
+  const JD = '前端工程师\n熟悉 Vue 与 TypeScript，有三年以上经验。'
+
+  async function withDraft(h: ReturnType<typeof harness>) {
+    const cookie = await login(h)
+    await h.app.inject({
+      method: 'PUT',
+      url: '/api/v1/draft',
+      cookies: { session: cookie },
+      payload: { draft: DRAFT },
+    })
+    return cookie
+  }
+
+  it('没底稿时不能生成', async () => {
+    const h = harness()
+    const cookie = await login(h)
+    const response = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/versions',
+      cookies: { session: cookie },
+      headers: { 'idempotency-key': 'k1' },
+      payload: { jdText: JD },
+    })
+    expect(response.statusCode).toBe(404)
+    expect(response.json().error.code).toBe('RESUME_NOT_FOUND')
+  })
+
+  it('JD 为空时给出可执行的下一步', async () => {
+    const h = harness()
+    const cookie = await withDraft(h)
+    const response = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/versions',
+      cookies: { session: cookie },
+      headers: { 'idempotency-key': 'k1' },
+      payload: { jdText: '   ' },
+    })
+    expect(response.statusCode).toBe(422)
+    expect(response.json().error.code).toBe('JD_EMPTY')
+  })
+
+  it('基于已保存的底稿生成，并落库', async () => {
+    const h = harness()
+    const cookie = await withDraft(h)
+    const response = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/versions',
+      cookies: { session: cookie },
+      headers: { 'idempotency-key': 'k1' },
+      payload: { jdText: JD },
+    })
+
+    expect(response.statusCode).toBe(201)
+    const version = response.json().version
+    expect(version.userId).toBeTruthy()
+
+    const user = await h.store.findUserByEmail('someone@example.com')
+    expect(await h.store.listVersions(user!.id)).toHaveLength(1)
+  })
+
+  it('同一个幂等键不会生成两份', async () => {
+    const h = harness()
+    const cookie = await withDraft(h)
+    const payload = { jdText: JD }
+
+    const first = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/versions',
+      cookies: { session: cookie },
+      headers: { 'idempotency-key': 'same-key' },
+      payload,
+    })
+    const second = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/versions',
+      cookies: { session: cookie },
+      headers: { 'idempotency-key': 'same-key' },
+      payload,
+    })
+
+    expect(second.json().version.id).toBe(first.json().version.id)
+    const user = await h.store.findUserByEmail('someone@example.com')
+    expect(await h.store.listVersions(user!.id)).toHaveLength(1)
   })
 })

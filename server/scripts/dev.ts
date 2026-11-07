@@ -14,6 +14,7 @@ import { buildApp } from '../src/app'
 import { createMemoryMailer } from '../src/auth/mailer'
 import { startEmbeddedPostgres } from '../src/db/embeddedPostgres'
 import * as schema from '../src/db/schema'
+import { createMemoryIdempotencyStore } from '../src/db/idempotency'
 import { createPostgresStore } from '../src/db/store'
 
 const port = Number(process.env.PORT ?? 3000)
@@ -27,6 +28,7 @@ await migrate(database, {
 
 const app = buildApp({
   store: createPostgresStore(database),
+  idempotency: createMemoryIdempotencyStore(),
   // 开发环境不发真邮件：信打在这里，链接照样能点
   mailer: createMemoryMailer(),
   siteUrl: `http://localhost:5173`,
