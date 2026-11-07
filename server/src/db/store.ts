@@ -1,5 +1,6 @@
-import { createHash, randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
-import { promisify } from 'node:util'
+import { createHash, randomUUID } from 'node:crypto'
+
+import argon2 from 'argon2'
 
 import { and, desc, eq } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
@@ -13,34 +14,26 @@ import { drafts, sessions, users, verificationTokens, versions } from './schema'
 /** Postgres 数据库句柄。 */
 export type PostgresDatabase = NodePgDatabase<typeof schema>
 
-const scrypt = promisify(scryptCallback) as (
-  password: string,
-  salt: Buffer,
-  keylen: number,
-) => Promise<Buffer>
-
 /**
  * 密码哈希。
  *
- * 用 Node 自带的 scrypt——内存硬、无需额外依赖。格式是 `scrypt$<salt>$<hash>`，
- * 两者都是 base64。校验时重算并**定长比较**，不靠字符串相等。
+ * 用 argon2id：内存硬、抗 GPU 与旁路攻击，参数与盐都编在哈希串里
+ * （`$argon2id$v=19$m=...,t=...,p=...$salt$hash`），校验时只需重算并定长比较。
+ *
+ * ADR-0002 定的是 argon2id。原型阶段一度用 Node 自带的 scrypt 顶替——那个环境
+ * 装不了原生模块。现在换回来。
  */
-const KEY_LENGTH = 64
-const SALT_LENGTH = 16
-
 export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(SALT_LENGTH)
-  const derived = await scrypt(password, salt, KEY_LENGTH)
-  return `scrypt$${salt.toString('base64')}$${derived.toString('base64')}`
+  return argon2.hash(password, { type: argon2.argon2id })
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const parts = stored.split('$')
-  if (parts.length !== 3 || parts[0] !== 'scrypt') return false
-  const salt = Buffer.from(parts[1]!, 'base64')
-  const expected = Buffer.from(parts[2]!, 'base64')
-  const derived = await scrypt(password, salt, expected.length)
-  return derived.length === expected.length && timingSafeEqual(derived, expected)
+  try {
+    return await argon2.verify(stored, password)
+  } catch {
+    // 哈希串格式不对（旧的 scrypt 串或损坏的串）——一律当作不匹配
+    return false
+  }
 }
 
 /**
