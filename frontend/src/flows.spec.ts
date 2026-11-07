@@ -6,14 +6,14 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { FORBIDDEN_WORDS, findForbiddenWords } from '@xiaoyi/shared/engines/forbidden'
 import {
-  EMPTY_STATES,
+  ALL_STATES,
   FAILURE_STATES,
-  STATUS_STATES,
   WARNING_STATES,
   stateHint,
   stateMessage,
   stateTitle,
 } from '@xiaoyi/shared/domain/states'
+import { ERROR_CODES } from '@xiaoyi/shared/contracts/error-codes'
 import { renderMarkdown } from '@xiaoyi/shared/engines/markdown'
 import { SAMPLE_DRAFT_TEXT, SAMPLE_JD_BACKEND, SAMPLE_JD_FRONTEND } from '@/mock/fixtures'
 import { useDraftStore } from '@/stores/draft'
@@ -645,13 +645,6 @@ describe('落地页的形态', () => {
 })
 
 describe('状态与文案体系', () => {
-  const ALL_STATES = {
-    ...FAILURE_STATES,
-    ...EMPTY_STATES,
-    ...WARNING_STATES,
-    ...STATUS_STATES,
-  }
-
   it('状态表里每条文案都非空，也不出现内部术语与禁用词', () => {
     const problems: string[] = []
     for (const [key, state] of Object.entries(ALL_STATES)) {
@@ -694,6 +687,39 @@ describe('状态与文案体系', () => {
     expect(stateHint(FAILURE_STATES['pdf-too-large'], { value: 10 })).toContain('10 MB')
     expect(stateMessage(FAILURE_STATES['pdf-too-large'], { value: 10 })).toContain('10 MB')
     expect(stateTitle(WARNING_STATES['structure-issues'], { value: 3 })).toContain('3 处')
+  })
+
+  it('错误码表与状态表一一对应', () => {
+    // 后端按错误码表生成响应，前端按码从状态表取文案。
+    // 两边对不上，用户就会看到「出错了」却不知道怎么办。
+    const problems: string[] = []
+
+    for (const [code, spec] of Object.entries(ERROR_CODES)) {
+      if (!ALL_STATES[spec.state]) {
+        problems.push(`错误码 ${code} 指向的状态 ${spec.state} 不存在`)
+      }
+    }
+
+    const owners = new Map<string, string>()
+    for (const [key, state] of Object.entries(ALL_STATES)) {
+      if (!state.code) continue
+      if (!(state.code in ERROR_CODES)) {
+        problems.push(`${key} 的错误码 ${state.code} 不在错误码表里`)
+        continue
+      }
+      const owner = owners.get(state.code)
+      if (owner) {
+        problems.push(`错误码 ${state.code} 被 ${owner} 与 ${key} 用了两次`)
+        continue
+      }
+      owners.set(state.code, key)
+    }
+
+    for (const code of Object.keys(ERROR_CODES)) {
+      if (!owners.has(code)) problems.push(`错误码 ${code} 没有对应的状态`)
+    }
+
+    expect(problems).toEqual([])
   })
 
   it('失败与空态的文案只从状态表里取', () => {
