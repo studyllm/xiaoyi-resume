@@ -4,11 +4,15 @@
 
 求职者通常用多份 PDF 应对不同岗位，内容来自同一段经历，差别只是侧重点。这个工具把这件事收成：**维护一份「我的简历」，粘贴不同的职位描述，得到多个各自独立的版本。**
 
-## 现状：原型
+## 现状：还在开发
 
-**这是一个前端原型。** 解析、诊断与版本生成全部由浏览器内的**本地规则引擎**完成——不连后端、不发网络请求、不调用模型。数据只保存在你自己的浏览器里。
+前端与服务端在**同一个仓库**里：
 
-界面上有「演示模式」标识，各页面也会写明这一点。它用来验证交互与规则，还不是可以直接大规模使用的成品。
+- 解析、诊断与版本生成由**服务端的规则引擎**完成——引擎的源码放在共享包里，前端与服务端引用的是**同一份文件**，不是两份拷贝。
+- 数据存在服务端的 Postgres 里，账号是**邮箱 + 密码**。换一台设备登录，看到的还是同一份简历。
+- 上传的 PDF **在浏览器里解析**，文件本身不会上传到服务器；发到服务端的只有提取出来的文字。
+
+界面上仍带「演示模式」标识：**大模型还没接上**，生成的质量与覆盖面都还是规则引擎的水平。它用来验证交互与规则，还不是可以直接大规模使用的成品。
 
 ## 能做什么
 
@@ -31,29 +35,36 @@
 
 ## 快速开始
 
-需要 **Node.js 22** 与 npm。
+需要 **Node.js 22**、npm 与 Docker（本地跑 Postgres 用）。
 
 ```bash
-cd frontend
-npm install
-npm run dev
+npm install          # 仓库根——npm workspace，一次装好前端、服务端与共享包
+npm run db:up        # 起 Postgres
+npm run db:migrate   # 跑迁移，建表
+npm run dev          # 前端 http://localhost:5173
+npm run dev:server   # 服务端 http://localhost:3000（另开一个终端）
 ```
 
-打开 http://localhost:5173 。落地页上点「用示例简历试一遍」，不需要自备简历就能走通全流程。
+打开 http://localhost:5173 。落地页上点「用示例简历试一遍」，不需要自备简历就能走通全流程——它会在服务端建一个临时的演示账号。
+
+前端在 5173、服务端在 3000，**开发时前端走 Vite 代理访问 `/api`**——同源，不用管 CORS，session cookie 也不用管 SameSite 与凭证。
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm run dev` | 开发服务器 |
+| `npm run dev` | 前端开发服务器 |
+| `npm run dev:server` | 服务端开发服务器 |
 | `npm run test` | 跑全部测试 |
 | `npm run type-check` | 类型检查 |
 | `npm run build` | 类型检查 + 构建 |
-| `npm run verify` | **门禁**：类型检查 → 全量并行测试 → 打乱顺序测试 → 构建 |
+| `npm run verify` | **门禁**：类型检查 → 全量并行测试 → 打乱顺序测试 → 构建（前端 + 服务端） |
+| `npm run db:up` / `db:down` | 起 / 停 Postgres |
+| `npm run db:migrate` | 跑数据库迁移 |
 
 ## 开发
 
 ### 门禁
 
-`npm run verify` 是「这次改动能不能交付」的唯一判定入口，本地与持续集成调用同一个命令。
+`npm run verify` 是「这次改动能不能交付」的唯一判定入口，本地与持续集成调用同一个命令，**前端与服务端一起跑**。
 
 后两项跑的是**同一批用例**，只是文件执行顺序被打乱（种子固定）。两者都通过才算通过——目的是把偶发失败变成可复现失败，而不是靠运气。
 
@@ -63,7 +74,7 @@ npm run dev
 
 产品行为由 OpenSpec 规格定义，代码只是它的实现：
 
-- `openspec/specs/` —— 当前生效的行为基准，14 个能力域
+- `openspec/specs/` —— 当前生效的行为基准，19 个能力域
 - `openspec/changes/` —— 进行中的变更；一轮变更全部实现完再统一归档
 
 改功能之前先读对应 spec。规范与代码冲突时以 spec 为准，并说明差异。
@@ -71,24 +82,37 @@ npm run dev
 ### 目录
 
 ```
-frontend/src/
-  domain/       纯数据类型与工具
-  engines/      规则引擎：解析、诊断、JD 解析、版本生成、批注锚定
-  stores/       Pinia：身份、简历、版本、界面态、本地存档
-  components/   通用与业务组件
-  views/        页面级组件
-  styles/       设计变量与全局样式
-  mock/         演示数据
-openspec/       规格与变更记录
-docs/           需求文档、开发计划、决策记录、门禁说明
+frontend/src/         前端应用
+  stores/             Pinia：身份、简历、版本、界面态
+  components/         通用与业务组件
+  views/              页面级组件
+  pdf/                浏览器专属：PDF 文字层提取
+  styles/             设计变量与全局样式
+  mock/               演示数据
+server/               服务端
+  src/routes/         路由与契约 schema
+  src/db/             Drizzle 表定义、迁移、存取
+  src/auth/           会话、密码、邮件
+  src/http/           日志、请求 id、错误处理
+  scripts/            备份、恢复、每日巡检
+packages/shared/      前后端共享的同一份源码
+  src/domain/         纯数据类型与工具
+  src/engines/        规则引擎：解析、诊断、JD 解析、版本生成
+  src/contracts/      契约：错误码表与请求响应 schema
+openspec/             规格与变更记录
+docs/                需求文档、开发计划、决策记录、运维手册
 ```
+
+**共享包不是复制。** `packages/shared` 里的文件被前端与服务端引用同一份，改动两端同时生效——「同一输入同一输出」靠结构保证，不靠约定。
 
 ## 文档
 
 - [产品需求文档 v0.1](docs/v0.1-产品需求文档.md)
 - [产品开发计划 v0.1 → v1.0](docs/产品开发计划-v1.0.md)
+- [API 契约](docs/api-contract.md)
 - [门禁与 CI 说明](docs/ci/README.md)
-- 决策记录：[ADR-0001 引擎模式开关](docs/adr/0001-engine-mode-switch.md)
+- [运维手册](docs/ops/runbook.md)
+- 决策记录：[ADR-0001 引擎模式开关](docs/adr/0001-engine-mode-switch.md)、[ADR-0002 鉴权模型](docs/adr/0002-auth-model.md)、[ADR-0003 事实账本与校验器](docs/adr/0003-integrity-verifier.md)、[ADR-0004 引擎位置](docs/adr/0004-engine-placement.md)、[ADR-0005 模型接入形态](docs/adr/0005-llm-access-shape.md)
 - 开发规范见 [CLAUDE.md](CLAUDE.md)
 
 ## License
