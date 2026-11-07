@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { tierFor, type ViewportTier } from '@/domain/breakpoints'
+import { tierFor, type ViewportTier } from '@xiaoyi/shared/domain/breakpoints'
 
 export type UnsavedChoice = 'save' | 'discard' | 'stay'
 

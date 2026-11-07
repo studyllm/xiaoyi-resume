@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 
 import { extractPdfText, MAX_PDF_BYTES, SIMPLIFIED_RADICALS, type PdfTextResult } from './pdfText'
-import { stateMessage } from '@/domain/states'
+import { stateMessage } from '@xiaoyi/shared/domain/states'
 
 /** 失败时用户看到的那一整句话。 */
 function failureText(result: PdfTextResult): string {

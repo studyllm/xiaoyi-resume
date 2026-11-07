@@ -1,5 +1,5 @@
-import type { IdSeed } from '@/domain/ids'
-import type { StateCopy } from '@/domain/states'
+import type { IdSeed } from '../domain/ids'
+import type { StateCopy } from '../domain/states'
 import type {
   CoverageTier,
   Diagnosis,
@@ -8,7 +8,7 @@ import type {
   RequirementCoverage,
   ResumeVersion,
   UncoveredReason,
-} from '@/domain/types'
+} from '../domain/types'
 
 export interface EngineContext {
   /** 注入的时间，引擎内部不读取系统时间 */

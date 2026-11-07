@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Draft, DraftItem, SectionKind } from '@/domain/types'
-import { SECTION_ORDER, SECTION_TITLES } from '@/domain/types'
+import type { Draft, DraftItem, SectionKind } from '../domain/types'
+import { SECTION_ORDER, SECTION_TITLES } from '../domain/types'
 import { diagnose } from './diagnose'
 import { findStructureFindings, structureIssueId } from './structure'
 

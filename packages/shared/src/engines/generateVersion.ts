@@ -1,4 +1,4 @@
-import { createIdSeed, type IdSeed } from '@/domain/ids'
+import { createIdSeed, type IdSeed } from '../domain/ids'
 import type {
   DiffEntry,
   Draft,
@@ -10,8 +10,8 @@ import type {
   VersionBullet,
   VersionItem,
   VersionSection,
-} from '@/domain/types'
-import { SECTION_ORDER, SECTION_TITLES } from '@/domain/types'
+} from '../domain/types'
+import { SECTION_ORDER, SECTION_TITLES } from '../domain/types'
 import { assertCleanOutput } from './forbidden'
 import { parseJd } from './jd'
 import { applyTransforms, assertNoFactsAdded } from './transforms'

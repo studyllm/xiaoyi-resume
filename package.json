@@ -1,0 +1,17 @@
+{
+  "name": "xiaoyi",
+  "private": true,
+  "type": "module",
+  "description": "小奕·简历：前端、服务端与共享包在同一个仓库里。",
+  "workspaces": [
+    "frontend",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev": "npm --workspace frontend run dev",
+    "build": "npm --workspace frontend run build",
+    "test": "npm --workspace frontend run test",
+    "type-check": "npm --workspace frontend run type-check",
+    "verify": "npm --workspace frontend run verify"
+  }
+}

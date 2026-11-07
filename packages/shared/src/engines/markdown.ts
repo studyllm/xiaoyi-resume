@@ -1,4 +1,4 @@
-import type { ResumeVersion, VersionItem } from '@/domain/types'
+import type { ResumeVersion, VersionItem } from '../domain/types'
 
 function dateLabel(item: VersionItem): string {
   if (!item.start) return ''

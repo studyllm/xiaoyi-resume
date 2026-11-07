@@ -4,8 +4,8 @@ import type {
   Draft,
   SectionKind,
   Severity,
-} from '@/domain/types'
-import { SECTION_ORDER } from '@/domain/types'
+} from '../domain/types'
+import { SECTION_ORDER } from '../domain/types'
 import { assertCleanOutput } from './forbidden'
 import {
   findResponsibilityHits,

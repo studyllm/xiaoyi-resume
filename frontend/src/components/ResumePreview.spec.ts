@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
-import type { DraftProfile } from '@/domain/types'
+import type { DraftProfile } from '@xiaoyi/shared/domain/types'
 import ResumePreview, { type PreviewSection } from './ResumePreview.vue'
 
 const SECTIONS: PreviewSection[] = [

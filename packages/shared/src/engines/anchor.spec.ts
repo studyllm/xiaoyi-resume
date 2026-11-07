@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { DiagnosisIssue, Draft } from '@/domain/types'
+import type { DiagnosisIssue, Draft } from '../domain/types'
 import { anchorLevel, anchorText, orderByDocument } from './anchor'
 
 const DRAFT: Draft = {

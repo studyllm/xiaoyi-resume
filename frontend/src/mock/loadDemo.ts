@@ -1,5 +1,5 @@
 import { SAMPLE_DRAFT_TEXT, SAMPLE_JD_FRONTEND } from './fixtures'
-import type { ActiveState } from '@/domain/states'
+import type { ActiveState } from '@xiaoyi/shared/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
 import { useUiStore } from '@/stores/ui'

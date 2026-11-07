@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { createIdSeed, resumeIdSeed, type IdSeed } from '@/domain/ids'
-import type { Draft, ResumeVersion } from '@/domain/types'
-import type { GenerateOptions } from '@/engines/types'
+import { createIdSeed, resumeIdSeed, type IdSeed } from '@xiaoyi/shared/domain/ids'
+import type { Draft, ResumeVersion } from '@xiaoyi/shared/domain/types'
+import type { GenerateOptions } from '@xiaoyi/shared/engines/types'
 import { useDraftStore } from './draft'
 import { engineContext, useEngines } from './engines'
 import { useSessionStore } from './session'

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DiagnosisIssue } from '@/domain/types'
+import type { DiagnosisIssue } from '@xiaoyi/shared/domain/types'
 
 defineProps<{
   /** 这条要点下的批注 */

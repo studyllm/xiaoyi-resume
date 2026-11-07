@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ResumeVersion } from '@/domain/types'
+import type { ResumeVersion } from '../domain/types'
 import { renderMarkdown } from './markdown'
 
 const VERSION: ResumeVersion = {

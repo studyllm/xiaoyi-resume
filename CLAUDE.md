@@ -17,22 +17,30 @@
 | 路由 | Vue Router 4（`createWebHistory`） |
 | 组件库 | Element Plus 2.9（**按需自动导入** + 中文语言包 `zhCn`） |
 | 测试 | Vitest 2 + `@vue/test-utils` + jsdom |
-| 路径别名 | `@` → `frontend/src` |
+| 路径别名 | `@` → `frontend/src`；共享包走包名 `@xiaoyi/shared/*`（npm workspace 解析，不用别名——包边界要由解析器强制） |
 
 ```
 frontend/src/
-  domain/     纯数据类型与工具（types.ts / time.ts / ids.ts / sectionFields.ts）
-  engines/    规则引擎：解析、诊断、JD 解析、版本生成、批注锚定、禁用词
   stores/     Pinia：session / draft / versions / ui / persistence / engines
   components/ 通用与业务组件（ResumeEditor、CommentSidebar、PaperField …）
   views/      页面级组件
   layouts/    DefaultLayout
   router/     路由与守卫
   styles/     tokens.css（设计变量）+ main.css（全局样式）
+  pdf/        浏览器专属能力（pdf.js 提取 PDF 文字层，不进共享包）
   mock/       演示数据与固定样例
+packages/shared/    前后端共享的那份源码（npm workspace，@xiaoyi/shared）
+  src/domain/       纯数据类型与工具（types / time / ids / sectionFields / states / breakpoints）
+  src/engines/      规则引擎：解析、诊断、JD 解析、版本生成、批注锚定、禁用词
+  src/contracts/    契约：错误码表与请求响应 schema
+server/       服务端（Node 工作区，P3 起）
 openspec/     规格（specs/ 为当前生效规格，changes/archive 为历史变更）
 docs/         产品需求文档
 ```
+
+**共享包不是复制。** `packages/shared` 里的文件被前端与服务端**引用同一份**，不复制两份——「同一输入同一输出」靠结构保证，不靠约定。改动那里的代码，两端同时生效。
+
+`pdf/` 留在前端：pdf.js 是浏览器能力，且 P1 承诺过「文件在浏览器里解析，不会上传到任何服务器」。
 
 ---
 
@@ -345,9 +353,11 @@ cd frontend && npm run verify
 ## 10. 常用命令
 
 ```bash
+npm install          # 在仓库根装依赖（npm workspace，lockfile 也在根目录）
+
 cd frontend
 npm run dev          # 开发服务器 http://localhost:5173
-npm run test         # 跑全部测试（vitest run）
+npm run test         # 跑全部测试（vitest run，含共享包的用例）
 npm run test:watch   # 监听模式
 npm run type-check   # vue-tsc 类型检查
 npm run build        # 类型检查 + 构建

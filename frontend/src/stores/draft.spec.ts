@@ -1,8 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import type { Draft } from '@/domain/types'
-import { anchorText } from '@/engines/anchor'
+import type { Draft } from '@xiaoyi/shared/domain/types'
+import { anchorText } from '@xiaoyi/shared/engines/anchor'
 import { useDraftStore } from './draft'
 import { useSessionStore } from './session'
 

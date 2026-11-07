@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { StructureFinding } from '@/engines/structure'
+import type { StructureFinding } from '@xiaoyi/shared/engines/structure'
 
 defineProps<{
   findings: StructureFinding[]

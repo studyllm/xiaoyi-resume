@@ -1,4 +1,4 @@
-import type { Bullet, Draft, DraftContact, DraftItem, DraftProfile } from '@/domain/types'
+import type { Bullet, Draft, DraftContact, DraftItem, DraftProfile } from '../domain/types'
 
 /**
  * 简历上的一次改动。界面只负责说清"用户做了什么"，

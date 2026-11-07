@@ -10,9 +10,9 @@ import { SAMPLE_DRAFT_TEXT, SAMPLE_JDS } from '@/mock/fixtures'
 import { useUiStore } from '@/stores/ui'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
-import { LOW_CONFIDENCE_THRESHOLD } from '@/engines/parseDraft'
-import { extractPdfText } from '@/engines/pdfText'
-import { findStructureFindings, type StructureFinding } from '@/engines/structure'
+import { LOW_CONFIDENCE_THRESHOLD } from '@xiaoyi/shared/engines/parseDraft'
+import { extractPdfText } from '@/pdf/pdfText'
+import { findStructureFindings, type StructureFinding } from '@xiaoyi/shared/engines/structure'
 import {
   FAILURE_STATES,
   WARNING_STATES,
@@ -20,8 +20,8 @@ import {
   stateMessage,
   stateTitle,
   type ActiveState,
-} from '@/domain/states'
-import type { Draft } from '@/domain/types'
+} from '@xiaoyi/shared/domain/states'
+import type { Draft } from '@xiaoyi/shared/domain/types'
 
 const router = useRouter()
 const draftStore = useDraftStore()

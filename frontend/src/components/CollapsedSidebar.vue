@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ArrowLeft } from '@element-plus/icons-vue'
 
-import type { Severity } from '@/domain/types'
+import type { Severity } from '@xiaoyi/shared/domain/types'
 import { useUiStore } from '@/stores/ui'
 
 defineProps<{

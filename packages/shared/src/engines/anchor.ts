@@ -1,4 +1,4 @@
-import type { DiagnosisIssue, Draft } from '@/domain/types'
+import type { DiagnosisIssue, Draft } from '../domain/types'
 
 export type AnchorLevel = 'section' | 'item' | 'bullet'
 

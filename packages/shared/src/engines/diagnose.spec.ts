@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Draft, DraftItem, SectionKind } from '@/domain/types'
-import { SECTION_ORDER, SECTION_TITLES } from '@/domain/types'
+import type { Draft, DraftItem, SectionKind } from '../domain/types'
+import { SECTION_ORDER, SECTION_TITLES } from '../domain/types'
 import { diagnose } from './diagnose'
 
 const CTX = { now: '2026-01-01T00:00:00.000Z', engineVersion: 'test' }

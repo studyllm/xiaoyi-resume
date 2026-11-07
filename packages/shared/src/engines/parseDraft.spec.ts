@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { createIdSeed } from '@/domain/ids'
-import type { Draft } from '@/domain/types'
+import { createIdSeed } from '../domain/ids'
+import type { Draft } from '../domain/types'
 import type { EngineContext } from './types'
 import { HEADER_KEYWORDS, LOW_CONFIDENCE_THRESHOLD, parseDraft } from './parseDraft'
 

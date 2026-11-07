@@ -1,6 +1,6 @@
-import { createIdSeed } from '@/domain/ids'
-import type { DraftSection } from '@/domain/types'
-import { parseDraft } from '@/engines/parseDraft'
+import { createIdSeed } from '@xiaoyi/shared/domain/ids'
+import type { DraftSection } from '@xiaoyi/shared/domain/types'
+import { parseDraft } from '@xiaoyi/shared/engines/parseDraft'
 import { SAMPLE_DRAFT_TEXT } from './fixtures'
 
 const CTX = { now: '2026-01-01T00:00:00.000Z', engineVersion: 'mock-0.1.0' }

@@ -7,10 +7,10 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 import IdentityDialog from '@/components/IdentityDialog.vue'
-import { extractPdfText } from '@/engines/pdfText'
+import { extractPdfText } from '@/pdf/pdfText'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
-import type { Draft } from '@/domain/types'
+import type { Draft } from '@xiaoyi/shared/domain/types'
 import ImportView from './ImportView.vue'
 
 const RESUME = `工作经历

@@ -4,12 +4,12 @@ import { useRouter } from 'vue-router'
 
 import EmptyState from '@/components/EmptyState.vue'
 import { SAMPLE_JDS } from '@/mock/fixtures'
-import type { RequirementCoverage } from '@/engines/types'
+import type { RequirementCoverage } from '@xiaoyi/shared/engines/types'
 import { engineContext, useEngines } from '@/stores/engines'
 import { useDraftStore } from '@/stores/draft'
 import { useUiStore } from '@/stores/ui'
 import { useVersionStore } from '@/stores/versions'
-import { FAILURE_STATES, stateMessage } from '@/domain/states'
+import { FAILURE_STATES, stateMessage } from '@xiaoyi/shared/domain/states'
 
 const router = useRouter()
 const draftStore = useDraftStore()

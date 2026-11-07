@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { collectDraftIds, createIdSeed, resumeIdSeed, type IdSeed } from '@/domain/ids'
-import { FAILURE_STATES, type ActiveState } from '@/domain/states'
+import { collectDraftIds, createIdSeed, resumeIdSeed, type IdSeed } from '@xiaoyi/shared/domain/ids'
+import { FAILURE_STATES, type ActiveState } from '@xiaoyi/shared/domain/states'
 import type {
   Bullet,
   Diagnosis,
@@ -12,13 +12,13 @@ import type {
   DraftContact,
   DraftItem,
   DraftProfile,
-} from '@/domain/types'
+} from '@xiaoyi/shared/domain/types'
 import { engineContext, useEngines } from './engines'
-import { orderByDocument } from '@/engines/anchor'
-import { findStructureFindings, type StructureFinding } from '@/engines/structure'
+import { orderByDocument } from '@xiaoyi/shared/engines/anchor'
+import { findStructureFindings, type StructureFinding } from '@xiaoyi/shared/engines/structure'
 import { draftKey, persistence } from './persistence'
 import { useSessionStore } from './session'
-import type { ParseResult } from '@/engines/types'
+import type { ParseResult } from '@xiaoyi/shared/engines/types'
 
 /**
  * 深拷贝草稿。Vue 的响应式代理不能被 structuredClone 克隆，

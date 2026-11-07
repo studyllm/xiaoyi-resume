@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { FORBIDDEN_WORDS, findForbiddenWords } from '@/engines/forbidden'
+import { FORBIDDEN_WORDS, findForbiddenWords } from '@xiaoyi/shared/engines/forbidden'
 import {
   EMPTY_STATES,
   FAILURE_STATES,
@@ -13,8 +13,8 @@ import {
   stateHint,
   stateMessage,
   stateTitle,
-} from '@/domain/states'
-import { renderMarkdown } from '@/engines/markdown'
+} from '@xiaoyi/shared/domain/states'
+import { renderMarkdown } from '@xiaoyi/shared/engines/markdown'
 import { SAMPLE_DRAFT_TEXT, SAMPLE_JD_BACKEND, SAMPLE_JD_FRONTEND } from '@/mock/fixtures'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import type { Session, User } from '@/domain/types'
+import type { Session, User } from '@xiaoyi/shared/domain/types'
 import { persistence, readLastName, STORAGE_KEYS, writeLastName } from './persistence'
 
 /** 名字到用户标识的拼法。存储分槽与登录态都用它，两边必须一致。 */
