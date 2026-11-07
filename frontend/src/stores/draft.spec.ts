@@ -43,7 +43,7 @@ function itemIdOf(draft: Draft, kind: string): string {
 describe('useDraftStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useSessionStore().login('张三')
+    { const s = useSessionStore(); s.user = { id: 'user-张三', email: 'zhang@example.com' }; s.status = 'user' }
   })
 
   it('starts without a draft', () => {
@@ -316,7 +316,7 @@ describe('useDraftStore', () => {
   })
 
   it('refuses to save while logged out', () => {
-    useSessionStore().logout()
+    { const s = useSessionStore(); s.user = null; s.status = 'guest' }
     const store = useDraftStore()
     store.ingest(RESUME)
     const outcome = store.savePending()
@@ -440,7 +440,7 @@ describe('简历按人分槽', () => {
 
   function saveAs(name: string): void {
     const session = useSessionStore()
-    session.login(name)
+    session.user = { id: `user-${name}`, email: `${name}@example.com` }; session.status = 'user'
     const store = useDraftStore()
     store.ingest(RESUME)
     store.savePending()
@@ -452,7 +452,7 @@ describe('简历按人分槽', () => {
     saveAs('张三')
     expect(store.hasDraft).toBe(true)
 
-    session.login('李四')
+    session.user = { id: 'user-李四', email: '李四@example.com' }; session.status = 'user'
     store.restore()
 
     expect(store.hasDraft).toBe(false)
@@ -464,11 +464,11 @@ describe('简历按人分槽', () => {
     const store = useDraftStore()
     saveAs('张三')
 
-    session.login('李四')
+    session.user = { id: 'user-李四', email: '李四@example.com' }; session.status = 'user'
     store.restore()
     expect(store.hasDraft).toBe(false)
 
-    session.login('张三')
+    session.user = { id: 'user-张三', email: '张三@example.com' }; session.status = 'user'
     store.restore()
     expect(store.hasDraft).toBe(true)
     expect(
@@ -481,7 +481,7 @@ describe('简历按人分槽', () => {
     const store = useDraftStore()
     saveAs('张三')
 
-    session.logout()
+    { session.user = null; session.status = 'guest' }
     store.restore()
 
     // 退出就是真的退出：落地页回到「导入我的简历」的样子

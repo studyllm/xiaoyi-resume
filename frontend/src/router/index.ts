@@ -79,6 +79,10 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, from) => {
+  const session = useSessionStore()
+  // 登录态在服务端，刷新后要先问一次「我是谁」再决定放不放行
+  if (session.status === 'unknown') await session.restore()
+
   const draftStore = useDraftStore()
   if (draftStore.dirty && from.name === 'draft' && to.name !== 'draft') {
     const choice = await useUiStore().requestUnsavedChoice()
@@ -86,8 +90,6 @@ router.beforeEach(async (to, from) => {
     if (choice === 'save') draftStore.saveEdits()
     else draftStore.discardEdits()
   }
-
-  const session = useSessionStore()
 
   if (!session.isLoggedIn) {
     if (to.meta.public) return true

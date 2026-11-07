@@ -22,7 +22,7 @@ const JD = `前端工程师
 `
 
 function seedDraft(): Draft {
-  useSessionStore().login('张三')
+  { const s = useSessionStore(); s.user = { id: 'user-张三', email: 'zhang@example.com' }; s.status = 'user' }
   const draftStore = useDraftStore()
   draftStore.ingest(RESUME)
   draftStore.savePending()
@@ -112,7 +112,7 @@ describe('useVersionStore', () => {
 
   it('refuses to generate a version while logged out', () => {
     const draft = seedDraft()
-    useSessionStore().logout()
+    { const s = useSessionStore(); s.user = null; s.status = 'guest' }
     const store = useVersionStore()
     expect(() => store.generate(draft, JD)).toThrow(/登录/)
     expect(store.versions).toHaveLength(0)

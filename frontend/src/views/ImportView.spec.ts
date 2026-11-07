@@ -13,6 +13,19 @@ import { useSessionStore } from '@/stores/session'
 import type { Draft } from '@xiaoyi/shared/domain/types'
 import ImportView from './ImportView.vue'
 
+vi.mock('@/api/client', async () => {
+  const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  return {
+    ...actual,
+    api: vi.fn(async (path: string) => {
+      if (path === '/api/v1/me') return { user: { id: 'user-张三', email: 'zhang@example.com' } }
+      if (path === '/api/v1/auth/login') return { user: { id: 'user-张三', email: 'zhang@example.com' } }
+      return {}
+    }),
+  }
+})
+
+
 const RESUME = `工作经历
 美团 前端工程师 2021.03 - 至今
 · 主导活动平台前端架构升级
@@ -26,7 +39,7 @@ const RESUME_MISSING_TIME = `工作经历
 async function mountImporter(loggedIn = true) {
   const pinia = createPinia()
   setActivePinia(pinia)
-  if (loggedIn) useSessionStore().login('张三')
+  if (loggedIn) { const s = useSessionStore(); s.user = { id: 'user-张三', email: 'zhang@example.com' }; s.status = 'user' }
 
   const router = createRouter({
     history: createMemoryHistory(),
@@ -142,10 +155,12 @@ describe('ImportView 的身份时机', () => {
     expect(store.hasDraft).toBe(false)
 
     const dialog = wrapper.findComponent(IdentityDialog)
-    await dialog.findAllComponents({ name: 'ElInput' })[0]!.setValue('张三')
+    const fields = dialog.findAllComponents({ name: 'ElInput' })
+    await fields[0]!.setValue('zhang@example.com')
+    await fields[1]!.setValue('correct horse battery')
     const confirm = dialog
       .findAllComponents({ name: 'ElButton' })
-      .find((node) => node.text().includes('保存到我的简历'))!
+      .find((node) => node.text().includes('登录'))!
     await confirm.trigger('click')
     await flushPromises()
 

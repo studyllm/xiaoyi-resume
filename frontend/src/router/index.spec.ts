@@ -28,7 +28,7 @@ function setupDirtyDraft() {
 describe('路由离开时的未保存提示', () => {
   beforeEach(async () => {
     setActivePinia(createPinia())
-    useSessionStore().login('张三')
+    { const s = useSessionStore(); s.user = { id: 'user-张三', email: 'zhang@example.com' }; s.status = 'user' }
     await router.push('/')
   })
 

@@ -176,6 +176,29 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps): void {
     return reply.code(204).send()
   })
 
+  /**
+   * 建一个演示账号。
+   *
+   * 落地页的「用示例简历试一遍」需要一个账号才能存简历、生成版本。这里现建一个
+   * 临时的：邮箱用保留域名 `.local`（不可能是真邮箱），不发验证邮件直接算已验证。
+   *
+   * 演示账号的垃圾数据由定时任务清掉——`docs/ops/runbook.md`（P5）里有那一条。
+   */
+  app.post('/api/v1/auth/demo', async (_request, reply) => {
+    const email = `demo-${randomToken().slice(0, 12).toLowerCase()}@xiaoyi.local`
+    const user = await store.createUser({
+      email,
+      passwordHash: await hashPassword(randomToken()),
+    })
+    await store.markEmailVerified(user.id)
+    await createSession(store, user.id, reply)
+
+    return reply.code(201).send({
+      user: { id: user.id, email: user.email },
+      verificationRequired: false,
+    })
+  })
+
   app.get('/api/v1/me', async (request, reply) => {
     const user = await currentUser(store, request)
     if (!user) return sendError(reply, 'AUTH_REQUIRED')

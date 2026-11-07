@@ -1,13 +1,26 @@
 // @vitest-environment jsdom
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import IdentityDialog from '@/components/IdentityDialog.vue'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
 import WelcomeView from './WelcomeView.vue'
+
+vi.mock('@/api/client', async () => {
+  const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  return {
+    ...actual,
+    api: vi.fn(async (path: string) => {
+      if (path === '/api/v1/me') return { user: { id: 'user-张三', email: 'zhang@example.com' } }
+      if (path === '/api/v1/auth/login') return { user: { id: 'user-张三', email: 'zhang@example.com' } }
+      return {}
+    }),
+  }
+})
+
 
 async function mountLanding(query = '', setup?: () => void) {
   const pinia = createPinia()
@@ -81,7 +94,7 @@ describe('落地页', () => {
   it('有自己的简历时主动作是「打开我的简历」', async () => {
     const { wrapper } = await mountLanding('', () => {
       const session = useSessionStore()
-      session.login('李四')
+      session.user = { id: 'user-李四', email: '李四@example.com' }; session.status = 'user'
       const draftStore = useDraftStore()
       draftStore.ingest('工作经历\n美团 前端工程师 2021.03 - 至今\n· 负责活动页开发')
       draftStore.savePending()
@@ -92,11 +105,11 @@ describe('落地页', () => {
   it('退出登录后回到「导入我的简历」', async () => {
     const { wrapper } = await mountLanding('', () => {
       const session = useSessionStore()
-      session.login('李四')
+      session.user = { id: 'user-李四', email: '李四@example.com' }; session.status = 'user'
       const draftStore = useDraftStore()
       draftStore.ingest('工作经历\n美团 前端工程师 2021.03 - 至今\n· 负责活动页开发')
       draftStore.savePending()
-      session.logout()
+      { session.user = null; session.status = 'guest' }
       draftStore.restore()
     })
     expect(buttonByText(wrapper, '导入我的简历')).toBeTruthy()
@@ -125,10 +138,12 @@ describe('落地页', () => {
     await flushPromises()
 
     const dialog = wrapper.findComponent(IdentityDialog)
-    await dialog.findAllComponents({ name: 'ElInput' })[0]!.setValue('张三')
+    const fields = dialog.findAllComponents({ name: 'ElInput' })
+    await fields[0]!.setValue('zhang@example.com')
+    await fields[1]!.setValue('correct horse battery')
     const confirm = dialog
       .findAllComponents({ name: 'ElButton' })
-      .find((node) => node.text().includes('继续'))!
+      .find((node) => node.text().includes('登录'))!
     await confirm.trigger('click')
     await flushPromises()
 

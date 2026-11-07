@@ -13,7 +13,7 @@ import VersionsView from './VersionsView.vue'
 async function mountVersions() {
   const pinia = createPinia()
   setActivePinia(pinia)
-  useSessionStore().login('张三')
+  { const s = useSessionStore(); s.user = { id: 'user-张三', email: 'zhang@example.com' }; s.status = 'user' }
 
   const router = createRouter({
     history: createMemoryHistory(),

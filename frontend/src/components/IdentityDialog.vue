@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
+import { ApiError } from '@/api/client'
 import { useSessionStore } from '@/stores/session'
 
-export type IdentityReason = 'save' | 'continue'
+type Mode = 'login' | 'register' | 'forgot'
 
 const props = withDefaults(
-  defineProps<{ modelValue: boolean; reason?: IdentityReason }>(),
+  defineProps<{ modelValue: boolean; reason?: 'save' | 'continue' }>(),
   { reason: 'continue' },
 )
 
@@ -17,40 +18,30 @@ const emit = defineEmits<{
 
 const session = useSessionStore()
 
-const userName = ref('')
+const mode = ref<Mode>('login')
+const email = ref('')
+const password = ref('')
 const error = ref('')
-const inputRef = ref<{ focus: () => void; select: () => void } | null>(null)
+const notice = ref('')
+const busy = ref(false)
 
 const COPY = {
-  save: {
-    title: '这份简历归你',
-    body: '给这份简历留个名字，之后你打开时就知道它在这儿。名字和简历都只存在这台设备上。',
-    submit: '保存到我的简历',
-  },
-  continue: {
-    title: '留个名字就能继续',
-    body: '名字和简历都只存在这台设备上，不需要注册账号。',
-    submit: '继续',
-  },
+  login: { title: '登录', submit: '登录', hint: '登录之后就能保存简历、生成版本。' },
+  register: { title: '注册', submit: '注册并验证邮箱', hint: '注册后会发一封验证邮件，点开就能开始用。' },
+  forgot: { title: '重置密码', submit: '发重置邮件', hint: '我们会发一封带重置链接的邮件过去。' },
 } as const
 
-const copy = computed(() => COPY[props.reason])
-
-/** 预填上次用过的名字并选中：常见情形是「还是我」，回车就能继续。 */
-async function fillLastName(): Promise<void> {
-  error.value = ''
-  userName.value = session.lastName
-  await nextTick()
-  inputRef.value?.focus()
-  inputRef.value?.select()
-}
-
-onMounted(fillLastName)
+const copy = computed(() => COPY[mode.value])
 
 watch(
   () => props.modelValue,
   (open) => {
-    if (open) void fillLastName()
+    if (!open) return
+    mode.value = 'login'
+    email.value = session.lastEmail
+    password.value = ''
+    error.value = ''
+    notice.value = ''
   },
 )
 
@@ -58,13 +49,36 @@ function close(): void {
   emit('update:modelValue', false)
 }
 
-function submit(): void {
-  if (!userName.value.trim()) {
-    error.value = '请填写名字'
-    return
+/** 把 ApiError 变成一句人话——文案来自状态表，不自己另写。 */
+function describe(caught: unknown): string {
+  if (caught instanceof ApiError) return `${caught.state.title}。${caught.state.hint}`
+  return '出了点问题。刷新一下再试。'
+}
+
+async function submit(): Promise<void> {
+  error.value = ''
+  notice.value = ''
+  busy.value = true
+  try {
+    if (mode.value === 'login') {
+      await session.login(email.value, password.value)
+      emit('confirmed')
+      close()
+      return
+    }
+    if (mode.value === 'register') {
+      await session.register(email.value, password.value)
+      notice.value = '验证邮件已发出，去查收一下点开链接就能登录。'
+      busy.value = false
+      return
+    }
+    await session.requestPasswordReset(email.value)
+    notice.value = '如果这个邮箱注册过，重置邮件已经发出。'
+    busy.value = false
+  } catch (caught) {
+    error.value = describe(caught)
+    busy.value = false
   }
-  session.login(userName.value)
-  emit('confirmed')
 }
 </script>
 
@@ -77,23 +91,44 @@ function submit(): void {
     @close="close"
   >
     <el-form label-position="top" @submit.prevent="submit">
-      <el-form-item label="你的名字" :error="error">
+      <el-form-item label="邮箱">
         <el-input
-          ref="inputRef"
-          v-model="userName"
-          placeholder="怎么称呼你就行"
-          autocomplete="nickname"
+          v-model="email"
+          type="email"
+          autocomplete="email"
+          placeholder="用来登录和收验证邮件"
+        />
+      </el-form-item>
+      <el-form-item v-if="mode !== 'forgot'" label="密码">
+        <el-input
+          v-model="password"
+          type="password"
+          :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+          placeholder="至少 8 位"
           @keyup.enter="submit"
         />
       </el-form-item>
+      <el-form-item v-if="error" :error="error" />
+      <el-form-item v-if="notice" class="identity-notice">{{ notice }}</el-form-item>
     </el-form>
 
-    <p class="identity-hint">{{ copy.body }}</p>
+    <p class="identity-hint">{{ copy.hint }}</p>
 
     <template #footer>
-      <el-button type="primary" @click="submit">{{ copy.submit }}</el-button>
+      <el-button type="primary" :loading="busy" @click="submit">{{ copy.submit }}</el-button>
       <el-button text @click="close">留在本页</el-button>
+      <el-button v-if="mode === 'login'" text @click="mode = 'forgot'">
+        忘记密码
+      </el-button>
+      <el-button v-else text @click="mode = 'login'">返回登录</el-button>
     </template>
+
+    <div class="identity-switch">
+      <el-button v-if="mode !== 'register'" text size="small" @click="mode = 'register'">
+        没有账号？注册一个
+      </el-button>
+      <el-button v-else text size="small" @click="mode = 'login'">已有账号？去登录</el-button>
+    </div>
   </el-dialog>
 </template>
 
@@ -103,5 +138,15 @@ function submit(): void {
   font-size: var(--text-xs);
   line-height: 1.7;
   color: var(--ink-500);
+}
+
+.identity-notice {
+  font-size: var(--text-xs);
+  line-height: 1.7;
+  color: var(--ink-500);
+}
+
+.identity-switch {
+  margin-top: var(--space-sm);
 }
 </style>
