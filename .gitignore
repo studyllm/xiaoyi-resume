@@ -11,6 +11,7 @@ coverage
 .env
 .env.*
 !.env.example
+!**/.env.example
 
 # 本机私有的 Claude Code 配置（项目共享的 commands/skills 仍入库）
 .claude/settings.local.json
