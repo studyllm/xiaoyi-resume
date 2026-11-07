@@ -173,8 +173,25 @@ export interface UncoveredRequirement {
   explanation: string
 }
 
+/** 声明级判定的不通过类型。界面按它分组展示（「有 2 处新增了数字」）。 */
+export type IntegrityIssueKind =
+  | 'unsupported-measure'
+  | 'unsupported-entity'
+  | 'rating-up'
+  | 'verb-strength-up'
+  | 'unsupported-term'
+  | 'unreferenced'
+  | 'keep-mismatch'
+  | 'delete-mismatch'
+
 export interface IntegrityViolation {
   bulletId: string
+  /** 哪一条声明没过。 */
+  claimId?: string
+  /** 结构化的不通过类型。 */
+  kind?: IntegrityIssueKind
+  /** 哪个成分没被支撑。 */
+  component?: string
   reason: string
   originalText: string
   revertedText: string

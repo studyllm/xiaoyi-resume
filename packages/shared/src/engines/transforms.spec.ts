@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyTransforms, assertNoFactsAdded, FORBIDDEN_TRANSFORMS } from './transforms'
+import { applyTransforms, FORBIDDEN_TRANSFORMS } from './transforms'
 
 describe('applyTransforms', () => {
   it('removes a leading bullet marker', () => {
@@ -49,50 +49,6 @@ describe('applyTransforms', () => {
 
   it('leaves a sentence without any transformation untouched', () => {
     expect(applyTransforms('负责组件库开发')).toBe('负责组件库开发')
-  })
-})
-
-describe('assertNoFactsAdded', () => {
-  it('passes when the output equals the source', () => {
-    expect(assertNoFactsAdded('负责 Vue 开发', '负责 Vue 开发')).toEqual([])
-  })
-
-  it('passes when only the layout changed', () => {
-    expect(assertNoFactsAdded('· 负责 vue 开发。', '负责 Vue 开发')).toEqual([])
-  })
-
-  it('reports a number that is absent from the source', () => {
-    expect(assertNoFactsAdded('负责组件库开发', '负责组件库开发，覆盖 30 个业务线').length).toBeGreaterThan(0)
-  })
-
-  it('reports a latin word that is absent from the source', () => {
-    expect(assertNoFactsAdded('负责组件库开发', '负责 React 开发').length).toBeGreaterThan(0)
-  })
-
-  it('reports a chinese character that is absent from the source', () => {
-    expect(assertNoFactsAdded('负责组件库开发', '负责组件库平台开发').length).toBeGreaterThan(0)
-  })
-
-  it('reports a verb whose strength was raised', () => {
-    expect(assertNoFactsAdded('参与组件库开发', '主导组件库开发').length).toBeGreaterThan(0)
-  })
-
-  it('reports a rating that was raised', () => {
-    expect(assertNoFactsAdded('熟悉 Vue 开发', '精通 Vue 开发').length).toBeGreaterThan(0)
-  })
-
-  it('reports a sentence that grew beyond the allowed margin', () => {
-    expect(assertNoFactsAdded('负责开发', '负责开发甲乙丙丁戊己庚辛壬癸').length).toBeGreaterThan(0)
-  })
-
-  it('accepts a latin word that comes from the entry metadata', () => {
-    expect(
-      assertNoFactsAdded('负责开发', '负责 Element 开发', { metadata: '美团 Element 组件库' }),
-    ).toEqual([])
-  })
-
-  it('reports a number whose precision changed', () => {
-    expect(assertNoFactsAdded('耗时 3.5 小时', '耗时 3.75 小时').length).toBeGreaterThan(0)
   })
 })
 
