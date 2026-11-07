@@ -24,6 +24,10 @@ jobs:
       - name: 安装依赖
         run: npm ci
 
-      - name: 运行门禁
+      - name: 运行门禁（前端）
         working-directory: frontend
+        run: npm run verify
+
+      - name: 运行门禁（服务端）
+        working-directory: server
         run: npm run verify

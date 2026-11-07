@@ -5,6 +5,7 @@
   "description": "小奕·简历：前端、服务端与共享包在同一个仓库里。",
   "workspaces": [
     "frontend",
+    "server",
     "packages/shared"
   ],
   "scripts": {
@@ -12,6 +13,7 @@
     "build": "npm --workspace frontend run build",
     "test": "npm --workspace frontend run test",
     "type-check": "npm --workspace frontend run type-check",
-    "verify": "npm --workspace frontend run verify"
+    "verify": "npm --workspace frontend run verify && npm --workspace server run verify",
+    "dev:server": "npm --workspace server run dev"
   }
 }
