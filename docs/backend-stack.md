@@ -124,10 +124,6 @@ npm run db:migrate     # 跑迁移 SQL
 npm run dev:server     # 服务端（读 DATABASE_URL 等环境变量）
 ```
 
-服务端的环境变量清单在 `server/.env.example`。**镜像仓库拉不动时**用 `npm --workspace server run dev:embedded`：内嵌的 Postgres + 内存发信器，免 Docker。
-
-`docker-compose.yml` 里还有一个可选的 Mailpit（`--profile mail`）收验证邮件，本地不用真发信。
-
 **测试不需要 Postgres。** `server/src/db/postgres.spec.ts` 用 `embedded-postgres`
 在临时目录里起一个**真 Postgres**（二进制随 npm 装，平台包自动解析），
 对着它跑迁移 SQL 与全部存储用例。这样 CI 不需要起服务容器，
