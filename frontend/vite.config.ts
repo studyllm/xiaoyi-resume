@@ -28,6 +28,14 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    proxy: {
+      // 服务端在另一个端口。走代理而不是跨域直连——
+      // 同源就不用 CORS，session cookie 也就不用管 SameSite 与凭证。
+      '/api': {
+        target: process.env.API_TARGET ?? 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
   },
   test: {
     environment: 'node',
