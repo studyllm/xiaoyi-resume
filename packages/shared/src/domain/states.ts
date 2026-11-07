@@ -12,6 +12,13 @@ export interface StateCopy {
   hint: string
   /** 主动作。空态里渲染成主按钮；没有可执行的下一步时不写。 */
   action?: string
+  /**
+   * 后端返回的机器可读错误码（契约 §5 的错误码表）。
+   *
+   * 只有服务端会返回错误码的状态才写。空态与警告态多半不写——
+   * 它们是界面自己判断出来的，不是某个响应带回来的。
+   */
+  code?: string
 }
 
 /** 当前正在呈现的一条状态。 */
@@ -57,11 +64,13 @@ export const FAILURE_STATES = defineStates({
   'parse-empty': {
     title: '没有可解析的内容',
     hint: '先把简历正文粘贴进来，至少要有分区标题和条目。',
-  },
+  
+    code: 'RESUME_EMPTY',},
   'parse-failed': {
     title: '解析失败',
     hint: '没能从这段文字里认出简历结构，换一种带「教育背景」「工作经历」这类分区标题的写法再试一次。',
-  },
+  
+    code: 'PARSE_FAILED',},
   'save-failed': {
     title: '保存失败',
     hint: '这次的结果没能存下来，重新解析一次再保存。',
@@ -73,11 +82,13 @@ export const FAILURE_STATES = defineStates({
   'jd-empty': {
     title: '还没有 JD 全文',
     hint: '先把岗位描述完整地粘贴进来，系统才能提取出岗位要求。',
-  },
+  
+    code: 'JD_EMPTY',},
   'jd-parse-failed': {
     title: 'JD 解析失败',
     hint: '没能从这段 JD 里认出岗位要求，检查是不是复制完整了，再试一次。',
-  },
+  
+    code: 'JD_PARSE_FAILED',},
   'generate-no-draft': {
     title: '需要先导入简历',
     hint: '还没有简历内容，导入一份简历再生成版本。',
@@ -85,7 +96,8 @@ export const FAILURE_STATES = defineStates({
   'generate-failed': {
     title: '生成失败',
     hint: '这次没能生成版本，重新生成一次。',
-  },
+  
+    code: 'GENERATION_FAILED',},
   'copy-failed': {
     title: '复制失败',
     hint: '浏览器没有把正文写进剪贴板，手动选中正文复制。',
@@ -137,16 +149,70 @@ export const FAILURE_STATES = defineStates({
   'storage-unavailable': {
     title: '本地存储不可用',
     hint: '刷新后数据会丢失，这页先别继续操作。',
-  },
+  
+    code: 'STORAGE_UNAVAILABLE',},
   // 下面两条是 P3 服务端化才会触发的，先把文案定下来，到时候不必再改一遍
   'network-failed': {
     title: '网络请求失败',
     hint: '检查网络连接后重试。',
   },
+
+  'invalid-credentials': {
+    title: '邮箱或密码不对',
+    hint: '再核对一下邮箱与密码；密码忘了就重置。',
+    code: 'INVALID_CREDENTIALS',
+  },
+  'email-not-verified': {
+    title: '邮箱还没验证',
+    hint: '去查收验证邮件并点开链接；没收到就重新发一封。',
+    code: 'EMAIL_NOT_VERIFIED',
+  },
+  'email-taken': {
+    title: '这个邮箱已经注册过了',
+    hint: '换个邮箱，或者直接登录。',
+    code: 'EMAIL_TAKEN',
+  },
+  'invalid-reset-token': {
+    title: '重置链接无效或已过期',
+    hint: '重新申请一次重置邮件。',
+    code: 'INVALID_RESET_TOKEN',
+  },
+  'draft-conflict': {
+    title: '简历在别处被改过',
+    hint: '刷新一下看看别人的改动，或者用你这份覆盖。',
+    code: 'DRAFT_REVISION_CONFLICT',
+  },
+  'llm-unavailable': {
+    title: '模型服务暂时用不了',
+    hint: '这次先用规则引擎生成，结果一样能投。',
+    code: 'LLM_UNAVAILABLE',
+  },
+  'llm-timeout': {
+    title: '模型响应超时',
+    hint: '这次先用规则引擎生成，或者稍后再试。',
+    code: 'LLM_TIMEOUT',
+  },
+  'rate-limited': {
+    title: '操作太频繁了',
+    hint: '等一会儿再试。',
+    code: 'RATE_LIMITED',
+  },
+  'validation-failed': {
+    title: '填的内容有问题',
+    hint: '检查标红的字段再提交。',
+    code: 'VALIDATION_FAILED',
+  },
+  'internal-error': {
+    title: '出了点问题',
+    hint: '刷新一下再试；一直不行就把请求编号发给我们。',
+    code: 'INTERNAL_ERROR',
+  },
+
   'not-logged-in': {
     title: '还没有登录',
     hint: '先登录，然后才能保存与同步。',
-  },
+  
+    code: 'AUTH_REQUIRED',},
   'confirm-overwrite': {
     title: '需要先确认覆盖',
     hint: '覆盖当前简历要先确认一次，已经生成的版本不会跟着改变。',
@@ -164,7 +230,8 @@ export const EMPTY_STATES = defineStates({
     title: '还没有简历',
     hint: '导入一份简历后，就能编辑、诊断，并按岗位生成版本。',
     action: '去导入简历',
-  },
+  
+    code: 'RESUME_NOT_FOUND',},
   'no-versions': {
     title: '还没有生成任何版本',
     hint: '粘贴一份岗位描述，系统会按它生成一份可投递的简历。',
@@ -198,7 +265,8 @@ export const EMPTY_STATES = defineStates({
     title: '没有找到这个版本',
     hint: '这个版本可能已经被删除了。',
     action: '回到版本列表',
-  },
+  
+    code: 'VERSION_NOT_FOUND',},
   'no-diff': {
     title: '没有可对照的改动',
     hint: '版本正文和当前简历完全一致，所以没有差异可对照。',
@@ -252,3 +320,15 @@ export const STATUS_STATES = defineStates({
 })
 
 export type StatusState = keyof typeof STATUS_STATES
+
+/**
+ * 全部状态合成一张表，按键查。
+ *
+ * 错误码表要指向这里的条目，守卫要断言两者一一对应——
+ * 靠三张分开的表各查一遍太容易漏。
+ */
+export const ALL_STATES: Record<string, StateCopy> = {
+  ...FAILURE_STATES,
+  ...EMPTY_STATES,
+  ...WARNING_STATES,
+}
