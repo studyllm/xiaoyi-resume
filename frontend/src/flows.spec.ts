@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { FORBIDDEN_WORDS, findForbiddenWords } from '@xiaoyi/shared/engines/forbidden'
 import {
@@ -19,6 +19,54 @@ import { SAMPLE_DRAFT_TEXT, SAMPLE_JD_BACKEND, SAMPLE_JD_FRONTEND } from '@/mock
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
 import { useVersionStore } from '@/stores/versions'
+
+// 服务端的简历读写在测试里 mock 掉：读取按「连不上」处理（退回本地缓存），
+// 保存按成功处理。这样用例的语义不变——本地缓存仍是读的那一份。
+let versionSeq = 0
+const createdVersions: Array<Record<string, unknown>> = []
+
+vi.mock('@/api/resume', async () => {
+  const { ApiError } = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  const { ALL_STATES } = await vi.importActual<
+    typeof import('@xiaoyi/shared/domain/states')
+  >('@xiaoyi/shared/domain/states')
+  return {
+    fetchDraft: vi.fn(async () => {
+      throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true)
+    }),
+    saveDraft: vi.fn(async (_draft: unknown, revision: number) => ({
+      revision: revision + 1,
+      savedAt: '2026-01-01T00:00:00.000Z',
+    })),
+    fetchVersions: vi.fn(async () => ({ items: [...createdVersions], total: createdVersions.length })),
+    deleteVersion: vi.fn(async (id: string) => {
+      const index = createdVersions.findIndex((item) => item.id === id)
+      if (index >= 0) createdVersions.splice(index, 1)
+    }),
+    createVersion: vi.fn(async () => {
+      const version = {
+        id: `ver-${++versionSeq}`,
+        userId: '',
+        name: `版本 ${versionSeq}`,
+        profile: { name: '', headline: '', contacts: [] },
+        body: '工作经历',
+        sections: [],
+        diff: [],
+        uncovered: [],
+        coverage: [],
+        integrity: { checked: 0, violations: [] },
+        engineVersion: 'x',
+        jdRawText: '',
+        jdRoleName: '',
+        draftRevision: 1,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }
+      createdVersions.push(version)
+      return { version }
+    }),
+  }
+})
+
 
 const INTERNAL_TERM = '底稿'
 
@@ -215,20 +263,25 @@ const OVERLAY_LAYERS = new Set(['IdentityDialog.vue'])
 /** 动作区里允许的实心主色个数上限。导入页的解析与保存分属流程的两步，是规格写明的例外。 */
 const ACTION_PRIMARY_LIMITS: Record<string, number> = { 'ImportView.vue': 2 }
 
-function seedDraft(): void {
+async function seedDraft(): Promise<void> {
   const session = useSessionStore()
   session.user = { id: 'user-张三', email: '张三@example.com' }; session.status = 'user'
   const draftStore = useDraftStore()
   draftStore.ingest(SAMPLE_DRAFT_TEXT)
-  draftStore.savePending()
+  await draftStore.savePending()
 }
 
 describe('完整流程回归', () => {
   beforeEach(() => {
+    // 服务端那份是模块级的：每个用例从头开始
+    createdVersions.length = 0
+    versionSeq = 0
+  })
+  beforeEach(() => {
     setActivePinia(createPinia())
   })
 
-  it('走通登录 → 放入 → 诊断 → 生成 → 列表 → 详情', () => {
+  it('走通登录 → 放入 → 诊断 → 生成 → 列表 → 详情', async () => {
     const session = useSessionStore()
     expect(session.isLoggedIn).toBe(false)
     session.user = { id: 'user-张三', email: '张三@example.com' }; session.status = 'user'
@@ -237,23 +290,23 @@ describe('完整流程回归', () => {
     const draftStore = useDraftStore()
     const parsed = draftStore.ingest(SAMPLE_DRAFT_TEXT)
     expect(parsed.ok).toBe(true)
-    expect(draftStore.savePending().ok).toBe(true)
+    expect((await draftStore.savePending()).ok).toBe(true)
 
     const diagnosis = draftStore.diagnose()
     expect(diagnosis.issues.length).toBeGreaterThan(0)
 
     const versionStore = useVersionStore()
-    const version = versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
+    const version = await versionStore.generate(SAMPLE_JD_FRONTEND)
     expect(versionStore.versions).toHaveLength(1)
     expect(versionStore.byId(version.id)).toBeDefined()
     expect(version.body).toContain('工作经历')
   })
 
-  it('改底稿之后旧版本的正文与改动对照都不变', () => {
-    seedDraft()
+  it('改底稿之后旧版本的正文与改动对照都不变', async () => {
+    await seedDraft()
     const draftStore = useDraftStore()
     const versionStore = useVersionStore()
-    const version = versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
+    const version = await versionStore.generate(SAMPLE_JD_FRONTEND)
     const bodyBefore = version.body
     const diffBefore = JSON.stringify(version.diff)
 
@@ -271,40 +324,38 @@ describe('完整流程回归', () => {
     expect(stored.draftRevision).toBe(version.draftRevision)
   })
 
-  it('同一份 JD 生成两次得到两份并存快照', () => {
-    seedDraft()
-    const draftStore = useDraftStore()
+  it('同一份 JD 生成两次得到两份并存快照', async () => {
+    await seedDraft()
     const versionStore = useVersionStore()
 
-    const first = versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
-    const second = versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
+    const first = await versionStore.generate(SAMPLE_JD_FRONTEND)
+    const second = await versionStore.generate(SAMPLE_JD_FRONTEND)
 
     expect(versionStore.versions).toHaveLength(2)
     expect(first.id).not.toBe(second.id)
     expect(first.body).toBe(second.body)
   })
 
-  it('删除其中一个版本不影响底稿与另一个版本', () => {
-    seedDraft()
+  it('删除其中一个版本不影响底稿与另一个版本', async () => {
+    await seedDraft()
     const draftStore = useDraftStore()
     const versionStore = useVersionStore()
 
-    const first = versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
-    const second = versionStore.generate(draftStore.draft!, SAMPLE_JD_BACKEND)
+    const first = await versionStore.generate(SAMPLE_JD_FRONTEND)
+    const second = await versionStore.generate(SAMPLE_JD_BACKEND)
     const draftBefore = JSON.stringify(draftStore.draft)
 
-    versionStore.remove(first.id)
+    await versionStore.remove(first.id)
 
     expect(versionStore.versions).toHaveLength(1)
     expect(versionStore.byId(second.id)).toBeDefined()
     expect(JSON.stringify(draftStore.draft)).toBe(draftBefore)
   })
 
-  it('重新登录之后底稿与版本都能恢复', () => {
-    seedDraft()
-    const draftStore = useDraftStore()
+  it('重新登录之后底稿与版本都能恢复', async () => {
+    await seedDraft()
     const versionStore = useVersionStore()
-    versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
+    await versionStore.generate(SAMPLE_JD_FRONTEND)
 
     const session = useSessionStore()
     { session.user = null; session.status = 'guest' }
@@ -315,20 +366,20 @@ describe('完整流程回归', () => {
     const restored = useSessionStore()
     restored.user = { id: 'user-张三', email: 'zhang@example.com' }
     restored.status = 'user'
-    useDraftStore().restore()
-    useVersionStore().restore()
+    await useDraftStore().restore()
+    await useVersionStore().restore()
 
     expect(useDraftStore().hasDraft).toBe(true)
     expect(useVersionStore().versions).toHaveLength(1)
   })
 
-  it('引擎输出里没有任何题目类文本', () => {
-    seedDraft()
+  it('引擎输出里没有任何题目类文本', async () => {
+    await seedDraft()
     const draftStore = useDraftStore()
     const versionStore = useVersionStore()
 
     const diagnosis = draftStore.diagnose()
-    const version = versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
+    const version = await versionStore.generate(SAMPLE_JD_FRONTEND)
 
     for (const issue of diagnosis.issues) {
       expect(findForbiddenWords(`${issue.problem}${issue.suggestion}${issue.quote}`)).toEqual([])
@@ -339,7 +390,7 @@ describe('完整流程回归', () => {
     }
   })
 
-  it('界面文案里不出现内部术语「底稿」', () => {
+  it('界面文案里不出现内部术语「底稿」', async () => {
     const templates = viewTemplates()
     expect(templates.length).toBeGreaterThan(0)
     for (const template of templates) {
@@ -347,11 +398,10 @@ describe('完整流程回归', () => {
     }
   })
 
-  it('引擎产出的文案里不出现内部术语「底稿」', () => {
-    seedDraft()
-    const draftStore = useDraftStore()
+  it('引擎产出的文案里不出现内部术语「底稿」', async () => {
+    await seedDraft()
     const versionStore = useVersionStore()
-    const version = versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
+    const version = await versionStore.generate(SAMPLE_JD_FRONTEND)
 
     for (const entry of version.uncovered) {
       expect(entry.explanation).not.toContain(INTERNAL_TERM)
@@ -361,11 +411,11 @@ describe('完整流程回归', () => {
     }
   })
 
-  it('导出的三种格式里的数字都来自底稿', () => {
-    seedDraft()
+  it('导出的三种格式里的数字都来自底稿', async () => {
+    await seedDraft()
     const draftStore = useDraftStore()
     const versionStore = useVersionStore()
-    const version = versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
+    const version = await versionStore.generate(SAMPLE_JD_FRONTEND)
 
     const draftNumbers = new Set(numbersOf(JSON.stringify(draftStore.draft)))
     for (const text of [version.body, renderMarkdown(version)]) {
@@ -375,7 +425,7 @@ describe('完整流程回归', () => {
     }
   })
 
-  it('界面样式里的视觉字面量只允许出现在设计变量文件里', () => {
+  it('界面样式里的视觉字面量只允许出现在设计变量文件里', async () => {
     const offenders: string[] = []
     for (const file of styleFiles()) {
       const content = readFileSync(file, 'utf8')
@@ -387,7 +437,7 @@ describe('完整流程回归', () => {
     expect(offenders).toEqual([])
   })
 
-  it('不直接从 element-plus 根包引组件', () => {
+  it('不直接从 element-plus 根包引组件', async () => {
     // 从根包引会绕过自动导入带来的样式：命令式弹窗只剩两个按钮，还跑到左上角
     const offenders: string[] = []
     const walk = (dir: string): void => {
@@ -408,13 +458,13 @@ describe('完整流程回归', () => {
     expect(offenders).toEqual([])
   })
 
-  it('界面模板里没有任何题目类文本', () => {
+  it('界面模板里没有任何题目类文本', async () => {
     for (const template of viewTemplates()) {
       expect(findForbiddenWords(template)).toEqual([])
     }
   })
 
-  it('上传入口是真实实现，不是占位', () => {
+  it('上传入口是真实实现，不是占位', async () => {
     const template = readFileSync(join(process.cwd(), 'src/views/ImportView.vue'), 'utf-8')
     expect(template).not.toContain('暂不支持 PDF 解析')
     expect(template).not.toContain('仅作占位展示')
@@ -423,11 +473,11 @@ describe('完整流程回归', () => {
     expect(template).toContain('extractPdfText')
   })
 
-  it('生成的版本没有出现底稿之外的数字', () => {
-    seedDraft()
+  it('生成的版本没有出现底稿之外的数字', async () => {
+    await seedDraft()
     const draftStore = useDraftStore()
     const versionStore = useVersionStore()
-    const version = versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
+    const version = await versionStore.generate(SAMPLE_JD_FRONTEND)
 
     const draftNumbers = new Set(numbersOf(JSON.stringify(draftStore.draft)))
     for (const number of numbersOf(version.body)) {
@@ -435,11 +485,11 @@ describe('完整流程回归', () => {
     }
   })
 
-  it('生成的版本没有出现底稿之外的实体', () => {
-    seedDraft()
+  it('生成的版本没有出现底稿之外的实体', async () => {
+    await seedDraft()
     const draftStore = useDraftStore()
     const versionStore = useVersionStore()
-    const version = versionStore.generate(draftStore.draft!, SAMPLE_JD_FRONTEND)
+    const version = await versionStore.generate(SAMPLE_JD_FRONTEND)
 
     const draftText = JSON.stringify(draftStore.draft)
     for (const word of ['Kafka', 'Kubernetes', 'Rust', 'Elasticsearch', 'Golang']) {
@@ -448,7 +498,7 @@ describe('完整流程回归', () => {
     }
   })
 
-  it('禁用词表覆盖了界面承诺的边界', () => {
+  it('禁用词表覆盖了界面承诺的边界', async () => {
     for (const word of ['题目', '题库', '刷题', '考点', '真题', '面经', '笔试', '八股']) {
       expect(FORBIDDEN_WORDS).toContain(word)
     }
@@ -456,7 +506,7 @@ describe('完整流程回归', () => {
 })
 
 describe('操作按钮的形态', () => {
-  it('页面动作区里的按钮都是 small 尺寸', () => {
+  it('页面动作区里的按钮都是 small 尺寸', async () => {
     const offenders: string[] = []
     for (const { name, template } of viewTemplateEntries()) {
       const ranges = actionAreaRanges(template)
@@ -468,7 +518,7 @@ describe('操作按钮的形态', () => {
     expect(offenders).toEqual([])
   })
 
-  it('页面动作区里只有一个实心主色，其余是文字按钮', () => {
+  it('页面动作区里只有一个实心主色，其余是文字按钮', async () => {
     const offenders: string[] = []
     for (const { name, template } of viewTemplateEntries()) {
       const ranges = actionAreaRanges(template)
@@ -486,7 +536,7 @@ describe('操作按钮的形态', () => {
     expect(offenders).toEqual([])
   })
 
-  it('带边框的次要动作只出现在对话框、顶栏与落地页', () => {
+  it('带边框的次要动作只出现在对话框、顶栏与落地页', async () => {
     const offenders: string[] = []
     for (const { name, template } of viewTemplateEntries()) {
       if (BORDERED_EXCEPTIONS.has(name)) continue
@@ -497,7 +547,7 @@ describe('操作按钮的形态', () => {
     expect(offenders).toEqual([])
   })
 
-  it('一个界面上至多一个实心主色按钮', () => {
+  it('一个界面上至多一个实心主色按钮', async () => {
     const offenders: string[] = []
     for (const { name, template } of viewTemplateEntries()) {
       if (PRIMARY_EXCEPTIONS.has(name)) continue
@@ -512,7 +562,7 @@ describe('操作按钮的形态', () => {
     expect(offenders).toEqual([])
   })
 
-  it('卡片里的操作按钮都带图标', () => {
+  it('卡片里的操作按钮都带图标', async () => {
     const offenders: string[] = []
     for (const { name, template } of viewTemplateEntries()) {
       for (const usage of buttonsIn(template)) {
@@ -532,7 +582,7 @@ describe('操作按钮的形态', () => {
     expect(offenders).toEqual([])
   })
 
-  it('登录表单不内联在落地页里', () => {
+  it('登录表单不内联在落地页里', async () => {
     // 登录表单的实心主色属于独立交互层。一旦把它内联回落地页，
     // 落地页上就会出现两个同屏的实心主色，守卫按文件统计抓不到。
     const landing = viewTemplateEntries().find((entry) => entry.name === 'WelcomeView.vue')
@@ -540,7 +590,7 @@ describe('操作按钮的形态', () => {
     expect(template).not.toMatch(/<el-form\b/)
     expect(template).not.toMatch(/<el-input\b/)
   })
-  it('身份对话框里有密码输入项', () => {
+  it('身份对话框里有密码输入项', async () => {
     // 账号是邮箱 + 密码了（account-access 整域重写）：不校验的密码就是
     // 承诺了做不到的事，所以要有校验——服务端用 scrypt 存哈希。
     const dialog = viewTemplateEntries().find((entry) => entry.name === 'IdentityDialog.vue')
@@ -549,17 +599,20 @@ describe('操作按钮的形态', () => {
     expect(template).toMatch(/type="password"/)
   })
 
-  it('简历与版本按用户分槽存放', () => {
-    // 存在一处固定 key 的话，换个名字登录看到的还是上一个人那份
+  it('简历与版本按用户隔离', async () => {
+    // 存在一处固定 key 的话，换个账号登录看到的还是上一个人那份。
+    // 现在隔离由服务端保证（按 user_id 查），本地只留底稿的只读缓存。
     const draftStore = readFileSync(join(storesDirectory(), 'draft.ts'), 'utf8')
     const versionStore = readFileSync(join(storesDirectory(), 'versions.ts'), 'utf8')
     expect(draftStore).toContain('draftKey(')
+    expect(versionStore).toContain('fetchVersions')
+    // 本地那份是只读缓存，按用户分槽；真正的隔离由服务端按 user_id 保证
     expect(versionStore).toContain('versionsKey(')
     expect(draftStore).not.toMatch(/persistence\.write\(STORAGE_KEYS\./)
     expect(versionStore).not.toMatch(/persistence\.write\(STORAGE_KEYS\./)
   })
 
-  it('落地页两个入口动作的文案', () => {
+  it('落地页两个入口动作的文案', async () => {
     const landing = viewTemplateEntries().find((entry) => entry.name === 'WelcomeView.vue')
     const template = landing?.template ?? ''
     // 主动作随状态换词，两态都要在
@@ -572,14 +625,14 @@ describe('操作按钮的形态', () => {
 })
 
 describe('品牌标识', () => {
-  it('两处顶栏都有标识', () => {
+  it('两处顶栏都有标识', async () => {
     for (const name of ['WelcomeView.vue', 'DefaultLayout.vue']) {
       const entry = viewTemplateEntries().find((item) => item.name === name)
       expect(entry?.template ?? '').toContain('<BrandLogo')
     }
   })
 
-  it('标识只从固定路径引用', () => {
+  it('标识只从固定路径引用', async () => {
     // 资源路径写在脚本里，得读整个文件而不是只读模板
     const content = readFileSync(join(componentsDirectory(), 'BrandLogo.vue'), 'utf8')
     expect(content).toContain('@/assets/logo.png')
@@ -591,7 +644,7 @@ describe('品牌标识', () => {
     expect(others.map((entry) => entry.name)).toEqual([])
   })
 
-  it('标识是装饰性的，不带替代文本', () => {
+  it('标识是装饰性的，不带替代文本', async () => {
     const logo = viewTemplateEntries().find((entry) => entry.name === 'BrandLogo.vue')
     const template = logo?.template ?? ''
     expect(template).toMatch(/<img[^>]*alt=""/)
@@ -600,7 +653,7 @@ describe('品牌标识', () => {
 })
 
 describe('落地页的形态', () => {
-  it('全仓的字号、圆角与间距都走设计变量', () => {
+  it('全仓的字号、圆角与间距都走设计变量', async () => {
     // 纸面是打印稿，用 pt/mm 表达物理尺寸，界面刻度对它不适用——所以只禁 px。
     // 几何尺寸（width / height / top / border-width）不受这条约束。
     const offenders: string[] = []
@@ -622,7 +675,7 @@ describe('落地页的形态', () => {
     expect(offenders).toEqual([])
   })
 
-  it('落地页的顶栏与主内容共用同一个容器', () => {
+  it('落地页的顶栏与主内容共用同一个容器', async () => {
     const landing = viewTemplateEntries().find((entry) => entry.name === 'WelcomeView.vue')
     const template = landing?.template ?? ''
     const containers = [...template.matchAll(/class="[^"]*\blanding-container\b[^"]*"/g)]
@@ -630,7 +683,7 @@ describe('落地页的形态', () => {
     expect(containers.length).toBe(3)
   })
 
-  it('落地页这一屏的实心主色分层计算', () => {
+  it('落地页这一屏的实心主色分层计算', async () => {
     const solidOf = (template: string) =>
       buttonsIn(template).filter((usage) => isSolidPrimary(usage.attrs))
 
@@ -648,7 +701,7 @@ describe('落地页的形态', () => {
 })
 
 describe('状态与文案体系', () => {
-  it('状态表里每条文案都非空，也不出现内部术语与禁用词', () => {
+  it('状态表里每条文案都非空，也不出现内部术语与禁用词', async () => {
     const problems: string[] = []
     for (const [key, state] of Object.entries(ALL_STATES)) {
       if (!state.title.trim()) problems.push(`${key} 缺标题`)
@@ -662,7 +715,7 @@ describe('状态与文案体系', () => {
     expect(problems).toEqual([])
   })
 
-  it('每条失败提示都给出了下一步', () => {
+  it('每条失败提示都给出了下一步', async () => {
     // 「失败」后面必须跟着用户能做的动作，否则用户只知道自己没成，不知道怎么办。
     const cues = ['请', '改', '再', '换', '检查', '刷新', '重新', '手动', '先']
     const problems: string[] = []
@@ -674,7 +727,7 @@ describe('状态与文案体系', () => {
     expect(problems).toEqual([])
   })
 
-  it('占位符只用 {value} 一个名字', () => {
+  it('占位符只用 {value} 一个名字', async () => {
     // 调用方只可能知道一个可变的量：出问题的那一个。多一个名字就多一处要对上的地方。
     const names = new Set<string>()
     for (const state of Object.values(ALL_STATES)) {
@@ -685,14 +738,14 @@ describe('状态与文案体系', () => {
     expect([...names].sort()).toEqual(['value'])
   })
 
-  it('占位符填得上', () => {
+  it('占位符填得上', async () => {
     expect(stateTitle(FAILURE_STATES['pdf-too-large'], { value: 10 })).toBe('文件太大')
     expect(stateHint(FAILURE_STATES['pdf-too-large'], { value: 10 })).toContain('10 MB')
     expect(stateMessage(FAILURE_STATES['pdf-too-large'], { value: 10 })).toContain('10 MB')
     expect(stateTitle(WARNING_STATES['structure-issues'], { value: 3 })).toContain('3 处')
   })
 
-  it('错误码表与状态表一一对应', () => {
+  it('错误码表与状态表一一对应', async () => {
     // 后端按错误码表生成响应，前端按码从状态表取文案。
     // 两边对不上，用户就会看到「出错了」却不知道怎么办。
     const problems: string[] = []
@@ -725,7 +778,7 @@ describe('状态与文案体系', () => {
     expect(problems).toEqual([])
   })
 
-  it('失败与空态的文案只从状态表里取', () => {
+  it('失败与空态的文案只从状态表里取', async () => {
     const markers = ['失败', '还没有', '没有找到', '请先', '需要先', '没能', '读不出来', '不可用']
     const offenders: string[] = []
     for (const { name, source } of viewSourceEntries()) {
@@ -739,7 +792,7 @@ describe('状态与文案体系', () => {
 })
 
 describe('无障碍与响应式基线', () => {
-  it('只有图标的按钮都带可访问名称', () => {
+  it('只有图标的按钮都带可访问名称', async () => {
     // 断言属性存在是结构检查，不是样式效果——允许。
     const offenders: string[] = []
     for (const { name, template } of viewTemplateEntries()) {
@@ -755,7 +808,7 @@ describe('无障碍与响应式基线', () => {
     expect(offenders).toEqual([])
   })
 
-  it('打印时纸面不被缩放', () => {
+  it('打印时纸面不被缩放', async () => {
     // 缩放只发生在屏幕这一侧；打印稿必须是 A4 原尺寸。
     const canvas = readFileSync(join(componentsDirectory(), 'PaperCanvas.vue'), 'utf8')
     expect(canvas).toMatch(/@media print[\s\S]*?zoom:\s*1/)

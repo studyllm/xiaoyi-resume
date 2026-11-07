@@ -212,7 +212,7 @@ GET /api/v1/versions?page=1&pageSize=20
 → 200 { "items": [ { "id": "ver_…", "name": "…", "jdRoleName": "…", "draftRevision": 4, "createdAt": "…" } ], "page": 1, "pageSize": 20, "total": 47 }
 ```
 
-列表项是**摘要**，不含正文——列表要轻。正文走 `GET /api/v1/versions/:id`。
+列表项是**完整版本**。一份简历的版本通常只有几十个，一并返回省掉前端逐个拉详情；`pageSize` 上限 100，最坏情况也就几百 KB。`GET /api/v1/versions/:id` 仍然保留——深链与打印页要能直接按 id 取。
 
 ```http
 GET /api/v1/versions/:id/body?format=markdown

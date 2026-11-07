@@ -30,7 +30,7 @@ CREATE TABLE "verification_tokens" (
 );
 --> statement-breakpoint
 CREATE TABLE "versions" (
-	"id" uuid PRIMARY KEY NOT NULL,
+	"id" text PRIMARY KEY NOT NULL,
 	"user_id" uuid NOT NULL,
 	"payload" jsonb NOT NULL,
 	"created_at" timestamp with time zone NOT NULL

@@ -1,67 +1,106 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
-import { createIdSeed, resumeIdSeed, type IdSeed } from '@xiaoyi/shared/domain/ids'
-import type { Draft, ResumeVersion } from '@xiaoyi/shared/domain/types'
+import type { ResumeVersion } from '@xiaoyi/shared/domain/types'
 import type { GenerateOptions } from '@xiaoyi/shared/engines/types'
-import { useDraftStore } from './draft'
-import { engineContext, useEngines } from './engines'
-import { useSessionStore } from './session'
+import { createVersion, deleteVersion, fetchVersions } from '@/api/resume'
 import { persistence, versionsKey } from './persistence'
+import { useDraftStore } from './draft'
+import { useSessionStore } from './session'
 
 export const useVersionStore = defineStore('versions', () => {
   const versions = ref<ResumeVersion[]>([])
-  let seed: IdSeed = createIdSeed()
 
   const count = computed(() => versions.value.length)
 
-  function restore(): void {
-    const userId = useSessionStore().currentUserId
-    const stored = userId ? persistence.read<ResumeVersion[]>(versionsKey(userId)) : null
-    if (!stored) {
-      // 当前用户没有版本：清掉内存里那一份，不留上一个用户的内容
-      versions.value = []
-      seed = createIdSeed()
-      return
+  /**
+   * 读版本列表。
+   *
+   * **服务端是权威**（ADR-0004）：先问服务端。连不上就退回本地缓存——
+   * 本地那份是只读缓存，断网时还能看到上次的版本，但改不动也存不了。
+   */
+  async function restore(): Promise<void> {
+    const run = doRestore()
+    restoring = run
+    try {
+      await run
+    } finally {
+      if (restoring === run) restoring = null
     }
-    versions.value = stored
-    seed = resumeIdSeed(stored.map((version) => version.id))
   }
 
-  function generate(
-    draft: Draft,
+  /** 正在进行的重载。生成前要等它完成。 */
+  let restoring: Promise<void> | null = null
+
+  async function doRestore(): Promise<void> {
+    const session = useSessionStore()
+    const userId = session.currentUserId
+    if (!userId) {
+      versions.value = []
+      return
+    }
+
+    try {
+      const result = await fetchVersions()
+      versions.value = result.items
+      // 本地留一份只读缓存：断网时还能看到上次的版本
+      persistence.write(versionsKey(userId), result.items)
+      session.offline = false
+      return
+    } catch {
+      session.offline = true
+    }
+
+    // 连不上：退回本地缓存，只读
+    const cached = persistence.read<ResumeVersion[]>(versionsKey(userId))
+    if (cached) versions.value = cached
+  }
+
+  /**
+   * 生成版本。
+   *
+   * **服务端生成**（ADR-0004）：客户端不提交算好的结构化简历。服务端读已保存的
+   * 底稿、跑引擎、落库。
+   */
+  async function generate(
     jdText: string,
     options: GenerateOptions = {},
-  ): ResumeVersion {
-    if (!useSessionStore().isLoggedIn) {
+  ): Promise<ResumeVersion> {
+    const session = useSessionStore()
+    if (!session.isLoggedIn) {
       throw new Error('需要登录后才能生成版本')
     }
 
+    if (restoring) await restoring
+
     const draftStore = useDraftStore()
     // 版本必须基于已保存的内容，修订号才对得上
-    draftStore.saveIfDirty()
-    const source = draftStore.draft ?? draft
+    await draftStore.saveIfDirty()
 
-    const engines = useEngines()
-    const result = engines.generateVersion(
-      source,
+    const result = await createVersion({
       jdText,
-      engineContext(),
-      { ...options, existingVersionCount: versions.value.length },
-      seed,
-    )
+      options: {
+        allowVerbFronting: options.allowVerbFronting,
+        dropIrrelevantProjects: options.dropIrrelevantProjects,
+      },
+      idempotencyKey: crypto.randomUUID(),
+    })
 
     const version = result.version
-    versions.value = [...versions.value, version]
-    const userId = useSessionStore().currentUserId
-    if (userId) persistence.write(versionsKey(userId), versions.value)
+    versions.value = [version, ...versions.value]
+    if (session.currentUserId) {
+      persistence.write(versionsKey(session.currentUserId), versions.value)
+    }
     return version
   }
 
-  function remove(id: string): void {
+  async function remove(id: string): Promise<void> {
+    const session = useSessionStore()
+    await deleteVersion(id)
     versions.value = versions.value.filter((version) => version.id !== id)
-    const userId = useSessionStore().currentUserId
-    if (userId) persistence.write(versionsKey(userId), versions.value)
+    if (session.currentUserId) {
+      persistence.write(versionsKey(session.currentUserId), versions.value)
+    }
   }
 
   function byId(id: string): ResumeVersion | undefined {

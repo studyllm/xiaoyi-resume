@@ -1,158 +1,117 @@
+// @vitest-environment jsdom
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Draft } from '@xiaoyi/shared/domain/types'
-import { useDraftStore } from './draft'
-import { useSessionStore } from './session'
+import { createVersion, deleteVersion, fetchVersions } from '@/api/resume'
+import { useDraftStore } from '@/stores/draft'
+import { useSessionStore } from '@/stores/session'
 import { useVersionStore } from './versions'
 
-const RESUME = `工作经历
-美团 前端工程师 2021.03 - 至今
-· 主导活动平台前端架构升级，页面构建时间从 120s 降到 18s
+// 服务端负责生成；前端只管「问服务端要、把结果放进列表」。
+// 生成的语义（版本名怎么起、抬头怎么带）由共享引擎与服务端端点的用例覆盖。
+vi.mock('@/api/resume', () => ({
+  fetchVersions: vi.fn(async () => ({ items: [], total: 0 })),
+  fetchVersion: vi.fn(),
+  createVersion: vi.fn(),
+  deleteVersion: vi.fn(async () => undefined),
+}))
 
-专业技能
-前端：Vue、React、TypeScript
-`
+const VERSION = {
+  id: 'ver-1',
+  userId: 'user-1',
+  name: '美团 前端工程师',
+  profile: { name: '张三', headline: '', contacts: [] },
+  body: '工作经历',
+  sections: [],
+  diff: [],
+  uncovered: [],
+  coverage: [],
+  integrity: { checked: 0, violations: [] },
+  engineVersion: 'x',
+  jdRawText: '',
+  jdRoleName: '',
+  draftRevision: 1,
+  createdAt: '2026-01-01T00:00:00.000Z',
+}
 
-const JD = `前端工程师
-
-任职要求：
-1. 精通 Vue 和 TypeScript
-2. 熟悉 Docker 与 CI/CD 流程
-`
-
-function seedDraft(): Draft {
-  { const s = useSessionStore(); s.user = { id: 'user-张三', email: 'zhang@example.com' }; s.status = 'user' }
-  const draftStore = useDraftStore()
-  draftStore.ingest(RESUME)
-  draftStore.savePending()
-  return draftStore.draft!
+function login(): void {
+  const session = useSessionStore()
+  session.user = { id: 'user-1', email: 'zhang@example.com' }
+  session.status = 'user'
 }
 
 describe('useVersionStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    vi.mocked(fetchVersions).mockReset()
+    vi.mocked(createVersion).mockReset()
+    vi.mocked(deleteVersion).mockReset()
+    vi.mocked(fetchVersions).mockResolvedValue({ items: [], total: 0 })
+    vi.mocked(createVersion).mockResolvedValue({ version: VERSION })
   })
 
-  it('starts without any version', () => {
+  it('从服务端读版本列表', async () => {
+    login()
+    vi.mocked(fetchVersions).mockResolvedValue({ items: [VERSION], total: 1 })
     const store = useVersionStore()
-    expect(store.versions).toEqual([])
-  })
 
-  it('generates a version from the current draft', () => {
-    const draft = seedDraft()
-    const store = useVersionStore()
-    const version = store.generate(draft, JD)
+    await store.restore()
+
+    expect(vi.mocked(fetchVersions)).toHaveBeenCalled()
     expect(store.versions).toHaveLength(1)
-    expect(version.body).toContain('美团')
-    expect(version.draftRevision).toBe(draft.revision)
+    expect(store.versions[0]!.id).toBe('ver-1')
   })
 
-  it('saves the unsaved changes before generating a version', () => {
-    const draft = seedDraft()
+  it('生成版本由服务端做，前端只把结果放进列表', async () => {
+    login()
+    const store = useVersionStore()
+
+    const version = await store.generate('前端工程师 JD')
+
+    expect(vi.mocked(createVersion)).toHaveBeenCalled()
+    // 带幂等键：手快点两下不会生成两份
+    const call = vi.mocked(createVersion).mock.calls[0]![0]
+    expect(call.idempotencyKey).toBeTruthy()
+    expect(call.jdText).toBe('前端工程师 JD')
+    expect(version.id).toBe('ver-1')
+    expect(store.versions).toHaveLength(1)
+  })
+
+  it('生成前先把未保存的改动存到服务端', async () => {
+    login()
     const draftStore = useDraftStore()
-    const before = draft.revision
-    draftStore.updateProfile({ name: '李四' })
-    expect(draftStore.dirty).toBe(true)
-
+    const savePending = vi.spyOn(draftStore, 'saveIfDirty')
     const store = useVersionStore()
-    const version = store.generate(draft, JD)
-    expect(draftStore.dirty).toBe(false)
-    expect(version.draftRevision).toBe(before + 1)
+
+    await store.generate('前端工程师 JD')
+
+    expect(savePending).toHaveBeenCalled()
   })
 
-  it('keeps two versions generated from the same job description', () => {
-    const draft = seedDraft()
+  it('删版本先删服务端，再从列表里去掉', async () => {
+    login()
+    vi.mocked(fetchVersions).mockResolvedValue({ items: [VERSION], total: 1 })
     const store = useVersionStore()
-    const first = store.generate(draft, JD)
-    const second = store.generate(draft, JD)
-    expect(store.versions).toHaveLength(2)
-    expect(first.body).toBe(second.body)
-    expect(first.id).not.toBe(second.id)
-  })
+    await store.restore()
 
-  it('numbers the fallback version name after the existing versions', () => {
-    const draft = seedDraft()
-    const store = useVersionStore()
-    const unnamed = '我们希望有个伙伴\n一起做点事情'
-    store.generate(draft, unnamed)
-    const second = store.generate(draft, unnamed)
-    expect(store.versions[0]!.name).toBe('版本 1')
-    expect(second.name).toBe('版本 2')
-  })
+    await store.remove('ver-1')
 
-  it('reads a version by its identifier', () => {
-    const draft = seedDraft()
-    const store = useVersionStore()
-    const version = store.generate(draft, JD)
-    expect(store.byId(version.id)?.body).toBe(version.body)
-  })
-
-  it('returns nothing for an unknown identifier', () => {
-    const store = useVersionStore()
-    expect(store.byId('missing')).toBeUndefined()
-  })
-
-  it('removes a version and keeps the others', () => {
-    const draft = seedDraft()
-    const store = useVersionStore()
-    const first = store.generate(draft, JD)
-    const second = store.generate(draft, JD)
-    store.remove(first.id)
-    expect(store.versions.map((version) => version.id)).toEqual([second.id])
-  })
-
-  it('leaves the draft untouched when a version is removed', () => {
-    const draft = seedDraft()
-    const store = useVersionStore()
-    const version = store.generate(draft, JD)
-    store.remove(version.id)
-    expect(useDraftStore().draft!.revision).toBe(draft.revision)
-  })
-
-  it('refuses to generate a version while logged out', () => {
-    const draft = seedDraft()
-    { const s = useSessionStore(); s.user = null; s.status = 'guest' }
-    const store = useVersionStore()
-    expect(() => store.generate(draft, JD)).toThrow(/登录/)
+    expect(vi.mocked(deleteVersion)).toHaveBeenCalledWith('ver-1')
     expect(store.versions).toHaveLength(0)
   })
 
-  it('carries the profile into the version', () => {
-    const draft = seedDraft()
-    useDraftStore().updateProfile({ name: '张三', headline: '前端工程师' })
+  it('没登录不能生成版本', async () => {
     const store = useVersionStore()
-    const version = store.generate(draft, JD)
-    expect(version.profile.name).toBe('张三')
-    expect(version.profile.headline).toBe('前端工程师')
+    await expect(store.generate('前端工程师 JD')).rejects.toThrow()
   })
 
-  it('keeps the profile of an old version when the draft profile changes afterwards', () => {
-    const draft = seedDraft()
+  it('按 id 找版本', async () => {
+    login()
+    vi.mocked(fetchVersions).mockResolvedValue({ items: [VERSION], total: 1 })
     const store = useVersionStore()
-    const version = store.generate(draft, JD)
+    await store.restore()
 
-    useDraftStore().updateProfile({ name: '改过的名字' })
-    expect(store.byId(version.id)!.profile.name).not.toBe('改过的名字')
-  })
-
-  it('keeps the content of an old version when the draft changes afterwards', () => {
-    const draft = seedDraft()
-    const store = useVersionStore()
-    const version = store.generate(draft, JD)
-    const before = version.body
-    const revisionAtGeneration = version.draftRevision
-
-    const draftStore = useDraftStore()
-    const section = draftStore.draft!.sections.find((item) => item.kind === 'experience')!
-    draftStore.updateBulletText(
-      section.id,
-      section.items[0]!.id,
-      section.items[0]!.bullets[0]!.id,
-      '改写之后的要点',
-    )
-
-    expect(store.byId(version.id)!.body).toBe(before)
-    expect(store.byId(version.id)!.draftRevision).toBe(revisionAtGeneration)
+    expect(store.byId('ver-1')?.name).toBe('美团 前端工程师')
+    expect(store.byId('nope')).toBeUndefined()
   })
 })

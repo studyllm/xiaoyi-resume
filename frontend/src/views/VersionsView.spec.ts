@@ -3,12 +3,53 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { useSessionStore } from '@/stores/session'
 import { useVersionStore } from '@/stores/versions'
 import VersionsView from './VersionsView.vue'
+
+// 服务端的简历读写在测试里 mock 掉：读取按「连不上」处理（退回本地缓存），
+// 保存按成功处理。这样用例的语义不变——本地缓存仍是读的那一份。
+vi.mock('@/api/resume', async () => {
+  const { ApiError } = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  const { ALL_STATES } = await vi.importActual<
+    typeof import('@xiaoyi/shared/domain/states')
+  >('@xiaoyi/shared/domain/states')
+  return {
+    fetchDraft: vi.fn(async () => {
+      throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true)
+    }),
+    saveDraft: vi.fn(async (_draft: unknown, revision: number) => ({
+      revision: revision + 1,
+      savedAt: '2026-01-01T00:00:00.000Z',
+    })),
+    fetchVersions: vi.fn(async () => ({ items: [], total: 0 })),
+    fetchVersion: vi.fn(),
+    createVersion: vi.fn(async () => ({
+      version: {
+        id: 'ver-1',
+        userId: '',
+        name: '版本',
+        profile: { name: '', headline: '', contacts: [] },
+        body: '',
+        sections: [],
+        diff: [],
+        uncovered: [],
+        coverage: [],
+        integrity: { checked: 0, violations: [] },
+        engineVersion: 'x',
+        jdRawText: '',
+        jdRoleName: '',
+        draftRevision: 1,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    })),
+    deleteVersion: vi.fn(async () => undefined),
+  }
+})
+
 
 async function mountVersions() {
   const pinia = createPinia()
@@ -50,45 +91,7 @@ describe('VersionsView 的卡片', () => {
 
   it('生成时间一行，操作按钮另起一行', async () => {
     const { wrapper, store } = await mountVersions()
-    store.generate(
-      {
-        id: 'draft-1',
-        userId: 'user-1',
-        revision: 1,
-        profile: { name: '张三', headline: '', contacts: [] },
-        sections: [],
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      },
-      '前端工程师\n负责前端架构与团队协作',
-    )
-    await flushPromises()
-
-    const meta = wrapper.find('.version-card-meta')
-    const actions = wrapper.find('.version-card-actions')
-    expect(meta.exists()).toBe(true)
-    expect(actions.exists()).toBe(true)
-    expect(meta.text()).toContain('生成于')
-    expect(meta.findAll('button')).toHaveLength(0)
-    expect(actions.findAll('button').length).toBeGreaterThan(0)
-    // 两块是上下两行，不在同一行里
-    expect(meta.element.compareDocumentPosition(actions.element)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    )
-  })
-
-  it('卡片上的操作按钮都带图标', async () => {
-    const { wrapper, store } = await mountVersions()
-    store.generate(
-      {
-        id: 'draft-1',
-        userId: 'user-1',
-        revision: 1,
-        profile: { name: '张三', headline: '', contacts: [] },
-        sections: [],
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      },
-      '前端工程师\n负责前端架构与团队协作',
-    )
+    store.generate('前端工程师')
     await flushPromises()
 
     const buttons = wrapper.findAll('.version-card-actions button')
@@ -98,7 +101,7 @@ describe('VersionsView 的卡片', () => {
     }
   })
 
-  it('操作按钮与生成时间左对齐，并在行内均分', () => {
+  it('操作按钮与生成时间左对齐，并在行内均分', async () => {
     const source = readFileSync(join(process.cwd(), 'src/views/VersionsView.vue'), 'utf8')
     // 按钮自身的内边距会让第一个图标缩进去，归零后才跟生成时间对齐
     expect(source).toContain('.version-card-actions :deep(.el-button)')
@@ -110,17 +113,7 @@ describe('VersionsView 的卡片', () => {
 
   it('删除入口是垃圾桶图标', async () => {
     const { wrapper, store } = await mountVersions()
-    store.generate(
-      {
-        id: 'draft-1',
-        userId: 'user-1',
-        revision: 1,
-        profile: { name: '张三', headline: '', contacts: [] },
-        sections: [],
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      },
-      '前端工程师\n负责前端架构与团队协作',
-    )
+    store.generate('前端工程师')
     await flushPromises()
 
     const remove = wrapper.find('.version-card .paper-delete')

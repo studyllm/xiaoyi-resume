@@ -13,6 +13,8 @@ import type {
   DraftItem,
   DraftProfile,
 } from '@xiaoyi/shared/domain/types'
+import { ApiError } from '@/api/client'
+import { fetchDraft, saveDraft } from '@/api/resume'
 import { engineContext, useEngines } from './engines'
 import { orderByDocument } from '@xiaoyi/shared/engines/anchor'
 import { findStructureFindings, type StructureFinding } from '@xiaoyi/shared/engines/structure'
@@ -26,6 +28,12 @@ import type { ParseResult } from '@xiaoyi/shared/engines/types'
  */
 function cloneDraft(source: Draft): Draft {
   return JSON.parse(JSON.stringify(source)) as Draft
+}
+
+/** 把一次失败变成状态表里的一条：网络不通给「离线」，其余按服务端给的码。 */
+function failureOf(error: unknown): ActiveState {
+  if (error instanceof ApiError) return { state: error.state }
+  return { state: FAILURE_STATES['offline'] }
 }
 
 export interface SaveOutcome {
@@ -117,18 +125,60 @@ export const useDraftStore = defineStore('draft', () => {
     return changedBulletIds.value.has(bulletId)
   }
 
-  function restore(): void {
-    const userId = useSessionStore().currentUserId
-    const stored = userId ? persistence.read<Draft>(draftKey(userId)) : null
-    if (!stored) {
-      // 当前用户没有简历：清掉内存里那一份，不留上一个用户的内容
-      draft.value = null
-      savedRevision.value = 0
-      savedSnapshot.value = null
-      structureFindings.value = []
+  /**
+   * 读简历底稿。
+   *
+   * **服务端是权威**（ADR-0004）：先问服务端。问不到才退回本地缓存——
+   * 本地那份是只读缓存，断网时还能看到上次的内容，但改不动也存不了。
+   */
+  async function restore(): Promise<void> {
+    const run = doRestore()
+    restoring = run
+    try {
+      await run
+    } finally {
+      if (restoring === run) restoring = null
+    }
+  }
+
+  /** 正在进行的重载。保存前要等它完成——否则带的是旧账号的修订号。 */
+  let restoring: Promise<void> | null = null
+
+  async function doRestore(): Promise<void> {
+    const session = useSessionStore()
+    const userId = session.currentUserId
+    if (!userId) {
+      clear()
+      return
+    }
+
+    try {
+      const result = await fetchDraft()
+      draft.value = result.draft
+      savedRevision.value = result.revision
+      savedSnapshot.value = cloneDraft(result.draft)
       dirty.value = false
       diagnosis.value = null
-      seed = createIdSeed()
+      seed = resumeIdSeed(collectDraftIds(result.draft))
+      // 本地留一份只读缓存：断网时还能看到上次的内容
+      persistence.write(draftKey(userId), result.draft)
+      session.offline = false
+      return
+    } catch (error) {
+      const notFound =
+        error instanceof ApiError && !error.offline && error.code === 'RESUME_NOT_FOUND'
+      if (notFound) {
+        // 服务端说没有：本地那份是旧的，清掉
+        persistence.remove(draftKey(userId))
+        clear()
+        return
+      }
+      session.offline = true
+    }
+
+    const stored = persistence.read<Draft>(draftKey(userId))
+    if (!stored) {
+      clear()
       return
     }
     draft.value = stored
@@ -136,6 +186,17 @@ export const useDraftStore = defineStore('draft', () => {
     savedSnapshot.value = cloneDraft(stored)
     dirty.value = false
     seed = resumeIdSeed(collectDraftIds(stored))
+  }
+
+  /** 清空内存里的那份，不留上一个用户的内容。 */
+  function clear(): void {
+    draft.value = null
+    savedRevision.value = 0
+    savedSnapshot.value = null
+    structureFindings.value = []
+    dirty.value = false
+    diagnosis.value = null
+    seed = createIdSeed()
   }
 
   function ingest(rawText: string): ParseResult {
@@ -146,7 +207,10 @@ export const useDraftStore = defineStore('draft', () => {
   }
 
   /** 把解析结果存为简历（导入页用）。 */
-  function savePending(options: { confirmed?: boolean } = {}): SaveOutcome {
+  async function savePending(options: { confirmed?: boolean } = {}): Promise<SaveOutcome> {
+    // 换账号后要等按新账号的重载完成，否则带的是旧修订号，服务端会判冲突
+    if (restoring) await restoring
+
     const session = useSessionStore()
     if (!session.isLoggedIn) {
       return { ok: false, failure: { state: FAILURE_STATES['not-logged-in'] } }
@@ -165,28 +229,48 @@ export const useDraftStore = defineStore('draft', () => {
       updatedAt: new Date().toISOString(),
     }
 
-    commit(next)
+    const outcome = await commit(next)
+    if (!outcome.ok) return outcome
+
     pending.value = null
     diagnosis.value = null
     return { ok: true }
   }
 
-  /** 固化当前内容：修订号递增一次，写入本地存储。 */
-  function commit(next: Draft): void {
-    savedRevision.value = next.revision
-    draft.value = next
-    savedSnapshot.value = cloneDraft(next)
-    dirty.value = false
-    const userId = useSessionStore().currentUserId
-    if (userId) persistence.write(draftKey(userId), next)
-    contentVersion.value += 1
+  /**
+   * 固化当前内容：写到服务端，修订号由服务端给。
+   *
+   * **写不进去就不改本地状态**——内存里那份要继续标成「未保存」，
+   * 用户不该看到「已保存」而其实没存上。
+   */
+  async function commit(next: Draft): Promise<SaveOutcome> {
+    const session = useSessionStore()
+    try {
+      const result = await saveDraft(next, savedRevision.value)
+      const saved: Draft = { ...next, revision: result.revision, updatedAt: result.savedAt }
+      savedRevision.value = saved.revision
+      draft.value = saved
+      savedSnapshot.value = cloneDraft(saved)
+      dirty.value = false
+      if (session.currentUserId) persistence.write(draftKey(session.currentUserId), saved)
+      contentVersion.value += 1
+      session.offline = false
+      return { ok: true }
+    } catch (error) {
+      if (error instanceof ApiError && error.offline) session.offline = true
+      return { ok: false, failure: failureOf(error) }
+    }
   }
 
   /** 保存编辑。逐字输入不会调用它。 */
-  function saveEdits(): boolean {
+  async function saveEdits(): Promise<boolean> {
     if (!draft.value) return false
-    commit({ ...draft.value, revision: savedRevision.value + 1, updatedAt: new Date().toISOString() })
-    return true
+    const outcome = await commit({
+      ...draft.value,
+      revision: savedRevision.value + 1,
+      updatedAt: new Date().toISOString(),
+    })
+    return outcome.ok
   }
 
   /**
@@ -199,7 +283,7 @@ export const useDraftStore = defineStore('draft', () => {
   }
 
   /** 有未保存的修改时先保存。生成版本、导出 PDF 前会调用。 */
-  function saveIfDirty(): boolean {
+  async function saveIfDirty(): Promise<boolean> {
     if (!dirty.value) return false
     return saveEdits()
   }
