@@ -56,3 +56,24 @@ export function createVersion(input: {
 export function deleteVersion(id: string): Promise<void> {
   return api<void>(`/api/v1/versions/${id}`, { method: 'DELETE' })
 }
+
+/**
+ * 把本机存的那份搬上服务端。
+ *
+ * 一次性迁移用（计划 T3.8）。**不做静默迁移**——用户点了才搬，
+ * 搬完服务端那份就是权威。
+ */
+export function importLocalDraft(input: {
+  draft?: { v: number; data: unknown } | null
+  versions?: Array<{ v: number; data: unknown }>
+}): Promise<{
+  draft: boolean
+  versions: number
+  discarded: Array<{ key: string; reason: string }>
+}> {
+  return api<{
+    draft: boolean
+    versions: number
+    discarded: Array<{ key: string; reason: string }>
+  }>('/api/v1/draft/import-local', { method: 'POST', body: input })
+}

@@ -2,11 +2,18 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { ApiError } from '@/api/client'
 import CommentSidebar from '@/components/CommentSidebar.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import PaperCanvas from '@/components/PaperCanvas.vue'
 import ResumeEditor, { type EditorFocusTarget } from '@/components/ResumeEditor.vue'
-import { EMPTY_STATES, STATUS_STATES, stateTitle } from '@xiaoyi/shared/domain/states'
+import {
+  ALL_STATES,
+  EMPTY_STATES,
+  STATUS_STATES,
+  stateHint,
+  stateTitle,
+} from '@xiaoyi/shared/domain/states'
 import type { DiagnosisIssue, Draft } from '@xiaoyi/shared/domain/types'
 import type { StructureFinding } from '@xiaoyi/shared/engines/structure'
 import { useDraftStore } from '@/stores/draft'
@@ -67,8 +74,36 @@ function toggleHandled(issue: DiagnosisIssue): void {
  * 保存。保存完检查一遍结构问题：
  * 还有问题就留在编辑模式，清单在右侧栏里，可以逐条跳进去补；都补完了才切预览。
  */
-function saveEdits(): void {
-  draftStore.saveEdits()
+async function migrateLocal(): Promise<void> {
+  try {
+    const result = await draftStore.importLocalCopy()
+    if (!result.ok) {
+      ElMessage.warning(stateTitle(ALL_STATES['local-copy-available']))
+      return
+    }
+    ElMessage.success('搬好了，这台机器上的简历已经进到你的账号里。')
+  } catch (error) {
+    ElMessage.error(
+      error instanceof ApiError ? `${error.state.title}。${error.state.hint}` : '搬移没成功，请稍后再试。',
+    )
+  }
+}
+
+function discardLocal(): void {
+  draftStore.discardLocalCopy()
+}
+
+async function saveEdits(): Promise<void> {
+  const outcome = await draftStore.saveEdits()
+  if (!outcome.ok) {
+    // 存不上就要说存不上——说「已保存」而其实没存上，比报错更坏
+    ElMessage.error(
+      outcome.failure
+        ? `${outcome.failure.state.title}。${outcome.failure.state.hint}`
+        : '保存没成功，稍后再试。',
+    )
+    return
+  }
   const findings = draftStore.checkStructure()
   ElMessage.success('已保存')
   mode.value = findings.length > 0 ? 'edit' : 'preview'
@@ -181,7 +216,28 @@ watch(
         </div>
       </div>
 
-      <EmptyState v-if="!draft" state="no-draft" @action="router.push('/import')" />
+      <!-- 本机还有一份时，用迁移提示占住空态的位置——
+           一个界面上只留一个实心主色（视觉规范 §4.6） -->
+      <el-alert
+        v-if="draftStore.localCopyAvailable"
+        class="card-block draft-migrate"
+        type="info"
+        show-icon
+        :closable="false"
+        :title="stateTitle(ALL_STATES['local-copy-available'])"
+        :description="stateHint(ALL_STATES['local-copy-available'])"
+      >
+        <div class="inline-row">
+          <!-- 文字按钮：页面的「保存」已经是实心主色，一个界面上只留一个 -->
+          <el-button text type="primary" size="small" @click="migrateLocal">
+            {{ ALL_STATES['local-copy-available'].action }}
+          </el-button>
+          <el-button text size="small" @click="discardLocal">丢弃本机那份</el-button>
+          <el-button text size="small" @click="router.push('/import')">或者导入一份新的</el-button>
+        </div>
+      </el-alert>
+
+      <EmptyState v-else-if="!draft" state="no-draft" @action="router.push('/import')" />
 
       <PaperCanvas v-else :status="paperStatus">
         <ResumeEditor
