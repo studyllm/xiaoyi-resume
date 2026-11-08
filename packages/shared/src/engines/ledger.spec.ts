@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Draft, ResumeVersion } from '../domain/types'
+import type { Draft, Fact, ResumeVersion } from '../domain/types'
 import {
   extractComponents,
   extractFacts,
@@ -9,7 +9,6 @@ import {
   sameContent,
   splitClauses,
   verifyClaims,
-  type Fact,
 } from './ledger'
 
 const DRAFT: Draft = {
@@ -57,7 +56,14 @@ function versionWith(texts: string[]): ResumeVersion {
     diff: [],
     uncovered: [],
     coverage: [],
-    integrity: { checked: 0, violations: [] },
+    integrity: {
+      checked: 0,
+      violations: [],
+      generator: 'rules' as const,
+      reverted: 0,
+      degraded: false,
+      observations: [],
+    },
     engineVersion: 'test',
   }
 }
