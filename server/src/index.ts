@@ -41,6 +41,7 @@ const generator = llm
 const app = buildApp({
   store: createPostgresStore(database),
   generator,
+  llm: llm ? { model: llm.model } : null,
   idempotency: createMemoryIdempotencyStore(),
   mailer: createSmtpMailer({
     host: required('SMTP_HOST'),

@@ -82,6 +82,7 @@ export const useVersionStore = defineStore('versions', () => {
       options: {
         allowVerbFronting: options.allowVerbFronting,
         dropIrrelevantProjects: options.dropIrrelevantProjects,
+        useLlm: options.useLlm === true,
       },
       idempotencyKey: crypto.randomUUID(),
     })

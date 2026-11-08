@@ -13,6 +13,7 @@ import { createMemoryStore } from './db/store'
 function testApp() {
   return buildApp({
     generator: rulesGenerator,
+    llm: null,
     store: createMemoryStore(),
     idempotency: createMemoryIdempotencyStore(),
     mailer: createMemoryMailer(),
@@ -101,6 +102,7 @@ describe('可观测', () => {
   it('响应里带请求 id，用户报错时能报给我们', async () => {
     const app = buildApp({
     generator: rulesGenerator,
+    llm: null,
       store: createMemoryStore(),
       mailer: createMemoryMailer(),
       siteUrl: 'http://localhost:5173',
@@ -116,6 +118,7 @@ describe('可观测', () => {
   it('客户端带了请求 id 就用它，方便跨服务追踪', async () => {
     const app = buildApp({
     generator: rulesGenerator,
+    llm: null,
       store: createMemoryStore(),
       mailer: createMemoryMailer(),
       siteUrl: 'http://localhost:5173',
@@ -130,5 +133,38 @@ describe('可观测', () => {
       headers: { 'x-request-id': 'req-from-client' },
     })
     expect(response.headers['x-request-id']).toBe('req-from-client')
+  })
+})
+
+describe('引擎状态', () => {
+  it('没配供应商时说没有模型', async () => {
+    const app = buildApp({
+      generator: rulesGenerator,
+      llm: null,
+      store: createMemoryStore(),
+      idempotency: createMemoryIdempotencyStore(),
+      mailer: createMemoryMailer(),
+      siteUrl: 'http://localhost:5173',
+      from: 'noreply@xiaoyi.example',
+      log: false,
+    })
+    const response = await app.inject({ method: 'GET', url: '/api/v1/engine' })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ available: false })
+  })
+
+  it('配了供应商时说有模型，但不回模型 id', async () => {
+    const app = buildApp({
+      generator: rulesGenerator,
+      llm: { model: 'test-model' },
+      store: createMemoryStore(),
+      idempotency: createMemoryIdempotencyStore(),
+      mailer: createMemoryMailer(),
+      siteUrl: 'http://localhost:5173',
+      from: 'noreply@xiaoyi.example',
+      log: false,
+    })
+    const response = await app.inject({ method: 'GET', url: '/api/v1/engine' })
+    expect(response.json()).toEqual({ available: true })
   })
 })

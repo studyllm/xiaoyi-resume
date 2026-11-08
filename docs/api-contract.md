@@ -110,6 +110,7 @@
 | `DELETE /api/v1/versions/:id` | 登录 | 是 | 删版本 |
 | `GET /api/v1/versions/:id/body` | 登录 | 是 | 版本正文（`format=text\|markdown`） |
 | `GET /api/v1/healthz` | 公开 | 是 | 健康检查 |
+| `GET /api/v1/engine` | 公开 | 是 | 服务端有没有配模型供应商。前端据此决定「本次用模型」那个开关显不显示 |
 
 **没有上传端点。** PDF 在浏览器里解析完，只把**提取出的文本**发给服务端——这是 P1 对用户的承诺（「文件在浏览器里解析，不会上传到任何服务器」），服务端因此不需要文件相关的端点与错误码。
 
@@ -203,7 +204,7 @@ POST /api/v1/versions
 → 201 { "version": { "id": "ver_…", "name": "…", "integrity": { "checked": 42, "violations": [], "generator": "rules", "reverted": 0, "degraded": false, "observations": [] }, "uncovered": [ … ] } }
 ```
 
-- `options.useLlm`：**一次性开关**（`docs/privacy-conclusions.md` §5.1）。**默认 `false`**——要发就得用户点头。`false` 时全程走规则引擎，**简历正文不发给任何第三方**。
+- `options.useLlm`：**一次性开关**（`docs/privacy-conclusions.md` §5.1）。**默认 `false`**——要发就得用户点头。`false` 时全程走规则引擎，**简历正文不发给任何第三方**。界面上那个开关由 `GET /api/v1/engine` 决定显不显示：服务端没配供应商时不显示——按了没反应比不显示更让人困惑。
 - 响应里的 `integrity` 用 ADR-0003 的新形状（`generator` / `reverted` / `degraded` / `observations` / `violations[].kind`）。
 - `generator` 是 `llm` 时，这一版的正文里有模型写的要点；`degraded` 为真表示这次生成没有完全用上模型。
 - 生成可能耗时（P4 接模型后十秒级），客户端超时设 **30 秒**，超时后按「离线/超时」降级提示，**不重复提交**（靠 `Idempotency-Key`）。

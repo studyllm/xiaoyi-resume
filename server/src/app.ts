@@ -8,6 +8,7 @@ import type { IdempotencyStore } from './db/idempotency'
 import { requestIdOf } from './http/logger'
 import type { Store } from './db/store'
 import { registerAuthRoutes } from './routes/auth'
+import { registerEngineRoutes } from './routes/engine'
 import { registerHealthz } from './routes/healthz'
 import { registerImportRoutes } from './routes/import'
 import { registerParse } from './routes/parse'
@@ -31,6 +32,8 @@ export interface AppDeps {
    * 路由不关心用的是哪个。
    */
   generator: ResumeGenerator
+  /** 配了模型供应商就给出模型 id，没配就是 null。 */
+  llm: { model: string } | null
 }
 
 /**
@@ -78,6 +81,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerParse(app)
   registerAuthRoutes(app, deps)
   registerImportRoutes(app, { store: deps.store })
+  registerEngineRoutes(app, { llm: deps.llm })
   registerResumeRoutes(app, {
     store: deps.store,
     idempotency: deps.idempotency,
