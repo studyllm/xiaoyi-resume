@@ -43,7 +43,12 @@ export function fetchVersion(id: string, signal?: AbortSignal): Promise<{ versio
 export function createVersion(input: {
   jdText: string
   name?: string
-  options?: { allowVerbFronting?: boolean; dropIrrelevantProjects?: boolean }
+  options?: {
+    allowVerbFronting?: boolean
+    dropIrrelevantProjects?: boolean
+    /** 这次要不要用模型改写。默认不用——发不发第三方要用户自己点头。 */
+    useLlm?: boolean
+  }
   idempotencyKey: string
 }): Promise<{ version: ResumeVersion }> {
   return api<{ version: ResumeVersion }>('/api/v1/versions', {
@@ -76,4 +81,13 @@ export function importLocalDraft(input: {
     versions: number
     discarded: Array<{ key: string; reason: string }>
   }>('/api/v1/draft/import-local', { method: 'POST', body: input })
+}
+
+/**
+ * 服务端有没有配模型供应商。
+ *
+ * 没配的时候，前端那个「本次用模型」的开关不显示——按了没反应比不显示更让人困惑。
+ */
+export function fetchEngineStatus(signal?: AbortSignal): Promise<{ available: boolean }> {
+  return api<{ available: boolean }>('/api/v1/engine', { signal })
 }

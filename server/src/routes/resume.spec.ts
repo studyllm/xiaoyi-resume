@@ -70,6 +70,7 @@ function harness(generator: ResumeGenerator = rulesGenerator) {
   const store = createMemoryStore()
   const mailer = createMemoryMailer()
   const app = buildApp({
+    llm: null,
     generator,
     store,
     idempotency: createMemoryIdempotencyStore(),

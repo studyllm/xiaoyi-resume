@@ -20,6 +20,7 @@ function harness(): Harness {
   const store = createMemoryStore()
   const app = buildApp({
     generator: rulesGenerator,
+    llm: null,
     store,
     idempotency: createMemoryIdempotencyStore(),
     mailer,

@@ -69,6 +69,26 @@ describe('useVersionStore', () => {
     expect(store.versions[0]!.id).toBe('ver-1')
   })
 
+  it('默认不把简历发给模型', async () => {
+    login()
+    const store = useVersionStore()
+
+    await store.generate('前端工程师 JD')
+
+    const call = vi.mocked(createVersion).mock.calls[0]![0]
+    expect(call.options?.useLlm).toBe(false)
+  })
+
+  it('用户点了「本次用模型」才把开关传给服务端', async () => {
+    login()
+    const store = useVersionStore()
+
+    await store.generate('前端工程师 JD', { useLlm: true })
+
+    const call = vi.mocked(createVersion).mock.calls[0]![0]
+    expect(call.options?.useLlm).toBe(true)
+  })
+
   it('生成版本由服务端做，前端只把结果放进列表', async () => {
     login()
     const store = useVersionStore()

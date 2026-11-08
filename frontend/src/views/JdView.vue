@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import EmptyState from '@/components/EmptyState.vue'
+import { fetchEngineStatus } from '@/api/resume'
 import { SAMPLE_JDS } from '@/mock/fixtures'
 import type { RequirementCoverage } from '@xiaoyi/shared/engines/types'
 import { engineContext, useEngines } from '@/stores/engines'
@@ -27,6 +28,19 @@ const warnings = ref<string[]>([])
 const generating = ref(false)
 const allowVerbFronting = ref(true)
 const dropIrrelevantProjects = ref(true)
+/** 服务端有没有配模型供应商。没配就不显示那个开关。 */
+const llmAvailable = ref(false)
+/** 本次要不要用模型改写。默认不用——要把简历发给第三方得用户自己点头。 */
+const useLlm = ref(false)
+
+onMounted(async () => {
+  try {
+    llmAvailable.value = (await fetchEngineStatus()).available
+  } catch {
+    // 问不到就当没有：开关不显示，不影响其余功能
+    llmAvailable.value = false
+  }
+})
 
 const draft = computed(() => draftStore.draft)
 
@@ -83,6 +97,7 @@ async function generate(): Promise<void> {
       versionName: roleName.value.trim() || undefined,
       allowVerbFronting: allowVerbFronting.value,
       dropIrrelevantProjects: dropIrrelevantProjects.value,
+      useLlm: useLlm.value,
     })
     generating.value = false
     ElMessage.success('版本已生成')
@@ -189,8 +204,15 @@ watch(
           active-text="略过与该 JD 完全无关的项目条目"
           inactive-text="保留所有项目条目"
         />
+        <el-switch
+          v-if="llmAvailable"
+          v-model="useLlm"
+          active-text="本次用模型改写——相关内容会发给模型供应商"
+          inactive-text="本次用规则引擎生成——简历不发给任何第三方"
+        />
         <p class="text-muted">
-          这两个开关只影响措辞与条目的取舍，不会让版本出现你简历里没有的事实。
+          这几个开关只影响措辞、条目的取舍与谁来改写，不会让版本出现你简历里没有的事实。
+          模型改写的每一条都会再核一遍，没通过的会换回规则引擎写的那句。
         </p>
       </div>
     </el-card>
