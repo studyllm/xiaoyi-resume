@@ -200,11 +200,12 @@ POST /api/v1/versions
   "name": "美团 前端工程师",
   "options": { "allowVerbFronting": true, "dropIrrelevantProjects": true, "useLlm": false }
 }
-→ 201 { "version": { "id": "ver_…", "name": "…", "integrity": { "checked": 42, "violations": [], "generator": "rules", "reverted": 0 }, "uncovered": [ … ] } }
+→ 201 { "version": { "id": "ver_…", "name": "…", "integrity": { "checked": 42, "violations": [], "generator": "rules", "reverted": 0, "degraded": false, "observations": [] }, "uncovered": [ … ] } }
 ```
 
-- `options.useLlm`：**一次性开关**（`docs/privacy-conclusions.md` §5.1）。`false` 时全程走规则引擎，**简历正文不发给任何第三方**。
-- 响应里的 `integrity` 用 ADR-0003 的新形状（`generator` / `reverted` / `violations[].kind`）。
+- `options.useLlm`：**一次性开关**（`docs/privacy-conclusions.md` §5.1）。**默认 `false`**——要发就得用户点头。`false` 时全程走规则引擎，**简历正文不发给任何第三方**。
+- 响应里的 `integrity` 用 ADR-0003 的新形状（`generator` / `reverted` / `degraded` / `observations` / `violations[].kind`）。
+- `generator` 是 `llm` 时，这一版的正文里有模型写的要点；`degraded` 为真表示这次生成没有完全用上模型。
 - 生成可能耗时（P4 接模型后十秒级），客户端超时设 **30 秒**，超时后按「离线/超时」降级提示，**不重复提交**（靠 `Idempotency-Key`）。
 
 ```http

@@ -54,7 +54,14 @@ const VERSION: ResumeVersion = {
   diff: [],
   uncovered: [],
   coverage: [],
-  integrity: { checked: 0, violations: [] },
+  integrity: {
+      checked: 0,
+      violations: [],
+      generator: 'rules' as const,
+      reverted: 0,
+      degraded: false,
+      observations: [],
+    },
   engineVersion: 'test',
 }
 

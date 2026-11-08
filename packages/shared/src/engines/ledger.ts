@@ -10,66 +10,17 @@
  * - **claim**：输出的一条断言，带着它依据的 fact。
  * - 判定只看「claim 的成分是否被它引用的 fact 支撑」。
  */
-import type { Draft, IntegrityIssueKind, ResumeVersion } from '../domain/types'
-
-export type ComponentKind = 'measure' | 'entity' | 'rating' | 'verb' | 'term'
-
-export interface FactComponent {
-  kind: ComponentKind
-  text: string
-  /** 只对 kind 是 'verb' 与 'rating'：强度序上的位次，越大越强。 */
-  strength?: number
-}
-
-export interface Fact {
-  /** 内容的哈希。同一份底稿两次抽出的 fact 集合全等，跨版本也能对照。 */
-  factId: string
-  /** 子句原文 */
-  text: string
-  /** 在底稿要点正文里的字符区间 */
-  span: { start: number; end: number }
-  components: FactComponent[]
-}
-
-export type ClaimOperation = 'keep' | 'rewrite' | 'merge' | 'delete'
-
-export interface Claim {
-  claimId: string
-  /** 这条断言属于哪个输出要点——回退的粒度是要点。 */
-  bulletId: string
-  text: string
-  span: { start: number; end: number }
-  /** 依据了哪些 fact */
-  sourceFactIds: string[]
-  operation: ClaimOperation
-  /** 生成器的自评置信度（0–1）。**不参与判定**——自评若参与判定，就是模型自己说自己可信。 */
-  confidence: number
-}
-
-export type ClaimIssueKind = IntegrityIssueKind
-
-export interface ClaimIssue {
-  kind: ClaimIssueKind
-  /** 哪个成分没被支撑 */
-  component?: string
-  detail: string
-}
-
-export type ClaimObservationKind = 'assembled-from-facts' | 'verb-strength-down'
-
-export interface ClaimObservation {
-  kind: ClaimObservationKind
-  detail: string
-}
-
-export interface ClaimVerdict {
-  claimId: string
-  bulletId: string
-  trusted: boolean
-  issues: ClaimIssue[]
-  /** 只记录、不拦截的观察项。 */
-  observations: ClaimObservation[]
-}
+import type {
+  Claim,
+  ClaimIssue,
+  ClaimObservation,
+  ClaimOperation,
+  ClaimVerdict,
+  Draft,
+  Fact,
+  FactComponent,
+  ResumeVersion,
+} from '../domain/types'
 
 // ---------------------------------------------------------------- 成分
 
@@ -168,6 +119,25 @@ const CJK_PATTERN = /[一-鿿]/
 /** 拉丁词由 R2（entity）管，实词只管中文。 */
 function isTerm(buffer: string): boolean {
   return buffer.length >= 2 && CJK_PATTERN.test(buffer)
+}
+
+/**
+ * 底稿全量的中文实词。
+ *
+ * R5 用它——「这个词在整份底稿里出现过吗」。底稿全量，不只是被引用的那几条 fact：
+ * 实词是中文层面的，放宽一点少误伤；数字、实体、评级、动词才是「事实」层面的，严格。
+ */
+export function draftTermsOf(draft: Draft): string[] {
+  const terms: string[] = []
+  for (const section of draft.sections) {
+    for (const item of section.items) {
+      terms.push(...extractTerms(`${item.org ?? ''} ${item.title ?? ''}`))
+      for (const bullet of item.bullets) {
+        terms.push(...extractTerms(bullet.text))
+      }
+    }
+  }
+  return [...new Set(terms)]
 }
 
 /** 从一段文字里抽出它的成分。纯规则，不含随机、不读时间。 */

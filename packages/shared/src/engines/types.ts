@@ -47,6 +47,12 @@ export interface GenerateOptions {
   dropIrrelevantProjects?: boolean
   allowVerbFronting?: boolean
   maxBulletsPerItem?: number
+  /**
+   * 这次要不要用模型改写。
+   *
+   * **默认不用**——简历正文发给第三方要用户自己点头（`docs/privacy-conclusions.md` §5.1）。
+   */
+  useLlm?: boolean
 }
 
 export type { CoverageTier, RequirementCoverage, UncoveredReason }
