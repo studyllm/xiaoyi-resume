@@ -25,8 +25,6 @@ export const FORBIDDEN_TRANSFORMS: ForbiddenTransform[] = [
 
 const COLLABORATION_MARKERS = ['协助', '共同', '配合', '支持', '参与', '协同', '联合', '一起']
 
-const RATING_UP_WORDS = ['精通', '专家', '资深专家', '大师']
-
 const CASE_DENYLIST = new Set([
   'ES',
   'PG',
@@ -62,10 +60,6 @@ const CASE_DENYLIST = new Set([
   'Element UI',
   'Element Plus',
 ])
-
-const CJK_PATTERN = /[一-鿿]/
-const LATIN_WORD_PATTERN = /[A-Za-z][A-Za-z0-9+#.]*/g
-const NUMBER_PATTERN = /\d+(?:\.\d+)?%?/g
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -149,73 +143,4 @@ export function applyTransforms(text: string, options: TransformOptions = {}): s
 
   output = stripTrailingPunctuation(output)
   return output
-}
-
-export interface FactsAddedContext {
-  metadata?: string
-}
-
-function cjkCharacters(text: string): string[] {
-  return [...text].filter((char) => CJK_PATTERN.test(char))
-}
-
-function latinWords(text: string): string[] {
-  return [...text.matchAll(LATIN_WORD_PATTERN)].map((match) => match[0])
-}
-
-function numbers(text: string): string[] {
-  return [...text.matchAll(NUMBER_PATTERN)].map((match) => match[0])
-}
-
-/**
- * 不变量校验：输出不得引入原句与条目元信息之外的事实。
- * 返回空数组表示通过；返回的每一条都是一处异常。
- */
-export function assertNoFactsAdded(
-  source: string,
-  output: string,
-  context: FactsAddedContext = {},
-): string[] {
-  const violations: string[] = []
-  const metadata = context.metadata ?? ''
-  const normalizedSource = toHalfWidth(source)
-  const normalizedOutput = toHalfWidth(output)
-  const normalizedMetadata = toHalfWidth(metadata)
-
-  for (const token of numbers(normalizedOutput)) {
-    if (!normalizedSource.includes(token) && !normalizedMetadata.includes(token)) {
-      violations.push(`出现了原句中没有的数字「${token}」`)
-    }
-  }
-
-  const allowedLatin = new Set(
-    latinWords(`${normalizedSource} ${normalizedMetadata}`).map((word) => word.toLowerCase()),
-  )
-  for (const word of latinWords(normalizedOutput)) {
-    if (word.length < 2) continue
-    if (!allowedLatin.has(word.toLowerCase())) {
-      violations.push(`出现了原句中没有的名词「${word}」`)
-    }
-  }
-
-  const sourceChars = new Set(cjkCharacters(normalizedSource))
-  for (const char of cjkCharacters(normalizedOutput)) {
-    if (!sourceChars.has(char)) {
-      violations.push(`出现了原句中没有的字「${char}」`)
-    }
-  }
-
-  const sourceLength = cjkCharacters(normalizedSource).length
-  const outputLength = cjkCharacters(normalizedOutput).length
-  if (outputLength > sourceLength + 4) {
-    violations.push(`中文长度比原句多了 ${outputLength - sourceLength} 个字`)
-  }
-
-  for (const word of RATING_UP_WORDS) {
-    if (normalizedOutput.includes(word) && !normalizedSource.includes(word)) {
-      violations.push(`技能评级被上调为「${word}」`)
-    }
-  }
-
-  return violations
 }

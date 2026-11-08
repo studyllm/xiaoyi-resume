@@ -14,7 +14,14 @@ import type {
 import { SECTION_ORDER, SECTION_TITLES } from '../domain/types'
 import { assertCleanOutput } from './forbidden'
 import { parseJd } from './jd'
-import { applyTransforms, assertNoFactsAdded } from './transforms'
+import { applyTransforms } from './transforms'
+import {
+  extractComponents,
+  extractFactsByBullet,
+  extractTerms,
+  makeClaim,
+  verifyClaim,
+} from './ledger'
 import {
   collectEvidence,
   computeCoverage,
@@ -43,6 +50,20 @@ interface PlannedItem {
   tailIds: Set<string>
   removed: RemovedBullet[]
   droppedWhole: boolean
+}
+
+/** 底稿全量的中文实词。R5 用它——「这个词在整份底稿里出现过吗」。 */
+function collectDraftTerms(draft: Draft): string[] {
+  const terms: string[] = []
+  for (const section of draft.sections) {
+    for (const item of section.items) {
+      terms.push(...extractTerms(`${item.org ?? ''} ${item.title ?? ''}`))
+      for (const bullet of item.bullets) {
+        terms.push(...extractTerms(bullet.text))
+      }
+    }
+  }
+  return [...new Set(terms)]
 }
 
 export function evaluateJd(draft: Draft, jd: Jd, _ctx: EngineContext): RequirementCoverage[] {
@@ -154,6 +175,11 @@ export function generateVersion(
   const integrityViolations: IntegrityViolation[] = []
   let checked = 0
 
+  // 事实账本：底稿每条要点切成若干 fact，按要点分组。
+  // 输出要点只引用**它来源的那条要点**的事实——从别处搬数字进来就查得出来。
+  const factsByBullet = extractFactsByBullet(draft)
+  const draftTerms = collectDraftTerms(draft)
+
   const versionSections: VersionSection[] = []
   const diffEntries: DiffEntry[] = []
 
@@ -171,16 +197,31 @@ export function generateVersion(
       const bullets: VersionBullet[] = []
       kept.forEach((bullet) => {
         const transformed = applyTransforms(bullet.text, { allowVerbFronting })
-        const metadata = `${entry.item.org ?? ''} ${entry.item.title ?? ''}`
-        const violations = assertNoFactsAdded(bullet.text, transformed, { metadata })
+        const metadataText = `${entry.item.org ?? ''} ${entry.item.title ?? ''}`
+        const sourceFacts = factsByBullet.get(bullet.bulletId) ?? []
+
+        const claim = makeClaim({
+          claimId: `claim-${bullet.bulletId}`,
+          bulletId: bullet.bulletId,
+          text: transformed,
+          operation: transformed === bullet.text ? 'keep' : 'rewrite',
+          sourceFactIds: sourceFacts.map((fact) => fact.factId),
+        })
+        const verdict = verifyClaim(claim, sourceFacts, {
+          draftTerms,
+          metadataComponents: extractComponents(metadataText),
+        })
         checked += 1
 
         let finalText = transformed
-        if (violations.length > 0) {
+        if (!verdict.trusted) {
           finalText = bullet.text
           integrityViolations.push({
             bulletId: bullet.bulletId,
-            reason: violations.join('；'),
+            claimId: claim.claimId,
+            kind: verdict.issues[0]?.kind,
+            component: verdict.issues[0]?.component,
+            reason: verdict.issues.map((issue) => issue.detail).join('；'),
             originalText: bullet.text,
             revertedText: finalText,
           })
