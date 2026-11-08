@@ -184,6 +184,74 @@ export type IntegrityIssueKind =
   | 'keep-mismatch'
   | 'delete-mismatch'
 
+// ---------------------------------------------------------------- 事实账本与声明账本
+//
+// ADR-0003 §7：这两个类型放 domain 层——账本不是某个引擎的实现细节，
+// 规则引擎与模型生成器都要产出它们。
+
+export type ComponentKind = 'measure' | 'entity' | 'rating' | 'verb' | 'term'
+
+export interface FactComponent {
+  kind: ComponentKind
+  text: string
+  /** 只对 kind 是 'verb' 与 'rating'：强度序上的位次，越大越强。 */
+  strength?: number
+}
+
+export interface Fact {
+  /** 内容的哈希。同一份底稿两次抽出的 fact 集合全等，跨版本也能对照。 */
+  factId: string
+  /** 子句原文 */
+  text: string
+  /** 在底稿要点正文里的字符区间 */
+  span: { start: number; end: number }
+  components: FactComponent[]
+}
+
+export type ClaimOperation = 'keep' | 'rewrite' | 'merge' | 'delete'
+
+export interface Claim {
+  claimId: string
+  /** 这条断言属于哪个输出要点——回退的粒度是要点。 */
+  bulletId: string
+  text: string
+  span: { start: number; end: number }
+  /** 依据了哪些 fact */
+  sourceFactIds: string[]
+  operation: ClaimOperation
+  /** 生成器的自评置信度（0–1）。**不参与判定**——自评若参与判定，就是模型自己说自己可信。 */
+  confidence: number
+}
+
+export interface ClaimIssue {
+  kind: IntegrityIssueKind
+  /** 哪个成分没被支撑 */
+  component?: string
+  detail: string
+}
+
+export type ClaimObservationKind = 'assembled-from-facts' | 'verb-strength-down'
+
+export interface ClaimObservation {
+  kind: ClaimObservationKind
+  detail: string
+}
+
+export interface ClaimVerdict {
+  claimId: string
+  bulletId: string
+  trusted: boolean
+  issues: ClaimIssue[]
+  /** 只记录、不拦截的观察项。 */
+  observations: ClaimObservation[]
+}
+
+/** 版本自带的审计线索。一份版本要能被独立审计，不能要求再 join 别的表。 */
+export interface VersionTrace {
+  facts: Fact[]
+  claims: Claim[]
+}
+
 export interface IntegrityViolation {
   bulletId: string
   /** 哪一条声明没过。 */
@@ -197,9 +265,25 @@ export interface IntegrityViolation {
   revertedText: string
 }
 
+/** 只记录、不拦截的观察项（如中文实词变更、职责降级）。 */
+export interface IntegrityObservation {
+  bulletId?: string
+  kind: string
+  detail: string
+}
+
 export interface IntegrityReport {
+  /** 校验了多少条声明 */
   checked: number
   violations: IntegrityViolation[]
+  /** 这一版正文是谁写的 */
+  generator: 'rules' | 'llm'
+  /** 有多少条输出要点回退到了规则引擎的产出 */
+  reverted: number
+  /** 这次生成没有完全由模型产出：模型不可用，或有要点被回退 */
+  degraded: boolean
+  /** 只记录、不拦截的观察项 */
+  observations: IntegrityObservation[]
 }
 
 export interface VersionBullet {
@@ -239,6 +323,8 @@ export interface ResumeVersion {
   uncovered: UncoveredRequirement[]
   coverage: RequirementCoverage[]
   integrity: IntegrityReport
+  /** 版本自带的审计线索。模型生成的版本带，规则生成的版本不带。 */
+  trace?: VersionTrace | null
   engineVersion: string
 }
 

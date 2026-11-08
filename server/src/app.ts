@@ -1,6 +1,8 @@
 import cookie from '@fastify/cookie'
 import Fastify, { type FastifyInstance } from 'fastify'
 
+import type { ResumeGenerator } from '@xiaoyi/shared/engines/generator'
+
 import type { MailSender } from './auth/mailer'
 import type { IdempotencyStore } from './db/idempotency'
 import { requestIdOf } from './http/logger'
@@ -24,6 +26,11 @@ export interface AppDeps {
   from: string
   /** 结构化日志开关。测试里传 false 关掉，免得输出污染用例。 */
   log?: boolean
+  /**
+   * 版本生成器。规则引擎与模型是同一个接口的两个实现（ADR-0005 §2）——
+   * 路由不关心用的是哪个。
+   */
+  generator: ResumeGenerator
 }
 
 /**
@@ -71,7 +78,11 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerParse(app)
   registerAuthRoutes(app, deps)
   registerImportRoutes(app, { store: deps.store })
-  registerResumeRoutes(app, { store: deps.store, idempotency: deps.idempotency })
+  registerResumeRoutes(app, {
+    store: deps.store,
+    idempotency: deps.idempotency,
+    generator: deps.generator,
+  })
 
   return app
 }

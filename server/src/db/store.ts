@@ -9,7 +9,7 @@ import type { Draft, ResumeVersion } from '@xiaoyi/shared/domain/types'
 
 import type { VerificationTokenKind } from './schema'
 import * as schema from './schema'
-import { drafts, sessions, users, verificationTokens, versions } from './schema'
+import { drafts, generations, sessions, users, verificationTokens, versions } from './schema'
 
 /** Postgres 数据库句柄。 */
 export type PostgresDatabase = NodePgDatabase<typeof schema>
@@ -58,6 +58,25 @@ export interface StoredSession {
   userId: string
   createdAt: Date
   expiresAt: Date
+}
+
+/** 生成日志的一行。 */
+export interface StoredGeneration {
+  id: string
+  userId: string
+  createdAt: Date
+  engine: 'rules' | 'llm'
+  model: string | null
+  promptVersion: string | null
+  draftRevision: number | null
+  jdHash: string
+  status: 'ok' | 'degraded' | 'error'
+  promptTokens: number
+  completionTokens: number
+  claims: number
+  reverted: number
+  rawOutput: string | null
+  error: string | null
 }
 
 export interface StoredVerificationToken {
@@ -119,6 +138,11 @@ export interface Store {
   }): Promise<void>
   /** 删版本。 */
   deleteVersion(userId: string, id: string): Promise<void>
+
+  /** 记一次生成。审计与算钱靠它。 */
+  addGeneration(input: Omit<StoredGeneration, 'id' | 'createdAt'> & { id?: string }): Promise<void>
+  /** 这个账号的生成记录，按时间倒序。 */
+  listGenerations(userId: string, limit?: number): Promise<StoredGeneration[]>
 }
 
 /** 邮箱规范化：去空白、转小写。登录与注册都用同一套。 */
@@ -132,6 +156,7 @@ export function createMemoryStore(): Store {
   const sessionRows = new Map<string, StoredSession>()
   const tokenRows = new Map<string, StoredVerificationToken>()
   const draftRows = new Map<string, { userId: string; payload: Draft; revision: number; updatedAt: Date }>()
+  const generationRows = new Map<string, StoredGeneration>()
   const versionRows = new Map<
     string,
     { id: string; userId: string; payload: ResumeVersion; createdAt: Date }
@@ -234,6 +259,21 @@ export function createMemoryStore(): Store {
     async deleteVersion(userId, id) {
       const row = versionRows.get(id)
       if (row?.userId === userId) versionRows.delete(id)
+    },
+
+    async addGeneration(input) {
+      const row: StoredGeneration = {
+        ...input,
+        id: input.id ?? randomUUID(),
+        createdAt: new Date(),
+      }
+      generationRows.set(row.id, row)
+    },
+    async listGenerations(userId, limit = 50) {
+      return [...generationRows.values()]
+        .filter((row) => row.userId === userId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, limit)
     },
   }
 }
@@ -346,6 +386,23 @@ export function createPostgresStore(db: PostgresDatabase): Store {
       await db
         .delete(versions)
         .where(and(eq(versions.id, id), eq(versions.userId, userId)))
+    },
+
+    async addGeneration(input) {
+      await db.insert(generations).values({
+        ...input,
+        id: input.id ?? randomUUID(),
+        createdAt: new Date(),
+      })
+    },
+    async listGenerations(userId, limit = 50) {
+      const rows = await db
+        .select()
+        .from(generations)
+        .where(eq(generations.userId, userId))
+        .orderBy(desc(generations.createdAt))
+        .limit(limit)
+      return rows as StoredGeneration[]
     },
   }
 }

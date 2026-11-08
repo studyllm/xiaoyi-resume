@@ -1,3 +1,9 @@
+import {
+  createLlmGenerator,
+  rulesGenerator,
+  type ResumeGenerator,
+} from '@xiaoyi/shared/engines/generator'
+
 import { describe, expect, it } from 'vitest'
 
 import { createMemoryMailer } from '../auth/mailer'
@@ -13,7 +19,24 @@ const DRAFT = {
   revision: 1,
   updatedAt: '2026-01-01T00:00:00.000Z',
   profile: { name: '张三', headline: '前端工程师', contacts: [] },
-  sections: [],
+  sections: [
+    {
+      id: 'section-1',
+      kind: 'experience',
+      title: '工作经历',
+      items: [
+        {
+          id: 'item-1',
+          org: '美团',
+          title: '前端工程师',
+          start: '2021-03',
+          end: null,
+          present: true,
+          bullets: [{ id: 'bullet-1', text: '主导活动平台前端架构升级，引入 Vue 3 与 Vite' }],
+        },
+      ],
+    },
+  ],
 }
 
 function versionOf(id: string, name: string) {
@@ -26,7 +49,14 @@ function versionOf(id: string, name: string) {
     diff: [],
     uncovered: [],
     coverage: [],
-    integrity: { checked: 0, violations: [] },
+    integrity: {
+      checked: 0,
+      violations: [],
+      generator: 'rules' as const,
+      reverted: 0,
+      degraded: false,
+      observations: [],
+    },
     engineVersion: 'x',
     jdRawText: '',
     jdRoleName: '',
@@ -36,10 +66,11 @@ function versionOf(id: string, name: string) {
   }
 }
 
-function harness() {
+function harness(generator: ResumeGenerator = rulesGenerator) {
   const store = createMemoryStore()
   const mailer = createMemoryMailer()
   const app = buildApp({
+    generator,
     store,
     idempotency: createMemoryIdempotencyStore(),
     mailer,
@@ -277,5 +308,96 @@ describe('生成版本', () => {
     expect(second.json().version.id).toBe(first.json().version.id)
     const user = await h.store.findUserByEmail('someone@example.com')
     expect(await h.store.listVersions(user!.id)).toHaveLength(1)
+  })
+})
+
+describe('生成日志', () => {
+  it('没说要用模型时，简历不发给任何第三方', async () => {
+    let called = 0
+    const generator = createLlmGenerator({
+      chat: async () => {
+        called += 1
+        return { text: '{"bullets":[]}' }
+      },
+      model: 'test-model',
+    })
+    const h = harness(generator)
+    const cookie = await login(h)
+    await h.app.inject({
+      method: 'PUT',
+      url: '/api/v1/draft',
+      cookies: { session: cookie },
+      payload: { draft: DRAFT },
+    })
+
+    await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/versions',
+      cookies: { session: cookie },
+      payload: { jdText: '前端工程师\n\n任职要求：\n1. 熟悉 Vue\n' },
+    })
+
+    expect(called).toBe(0)
+  })
+
+  it('生成一版就记一条日志', async () => {
+    const h = harness()
+    const cookie = await login(h)
+    await h.app.inject({
+      method: 'PUT',
+      url: '/api/v1/draft',
+      cookies: { session: cookie },
+      payload: { draft: DRAFT },
+    })
+
+    await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/versions',
+      cookies: { session: cookie },
+      payload: { jdText: '前端工程师\n\n任职要求：\n1. 熟悉 Vue\n' },
+    })
+
+    const rows = await h.store.listGenerations((await h.store.findUserByEmail('someone@example.com'))!.id)
+    expect(rows.length).toBe(1)
+    expect(rows[0]!.engine).toBe('rules')
+    expect(rows[0]!.status).toBe('ok')
+    expect(rows[0]!.jdHash.length).toBe(32)
+  })
+
+  it('模型不可用时版本照样生成，标记为降级', async () => {
+    const generator = createLlmGenerator({
+      chat: async () => {
+        throw new Error('模型超时')
+      },
+      model: 'test-model',
+    })
+    const h = harness(generator)
+    const cookie = await login(h)
+    await h.app.inject({
+      method: 'PUT',
+      url: '/api/v1/draft',
+      cookies: { session: cookie },
+      payload: { draft: DRAFT },
+    })
+
+    const response = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/versions',
+      cookies: { session: cookie },
+      payload: {
+        jdText: '前端工程师\n\n任职要求：\n1. 熟悉 Vue\n',
+        options: { useLlm: true },
+      },
+    })
+
+    expect(response.statusCode).toBe(201)
+    const body = response.json() as { version: { integrity: { generator: string; degraded: boolean } } }
+    expect(body.version.integrity.generator).toBe('rules')
+    expect(body.version.integrity.degraded).toBe(true)
+
+    const userId = (await h.store.findUserByEmail('someone@example.com'))!.id
+    const rows = await h.store.listGenerations(userId)
+    expect(rows[0]!.status).toBe('error')
+    expect(rows[0]!.error).toBe('模型超时')
   })
 })
