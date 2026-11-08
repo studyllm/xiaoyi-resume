@@ -70,10 +70,47 @@ const groups = computed<DiffGroup[]>(() => {
 const integrityText = computed(() => {
   const integrity = version.value?.integrity
   if (!integrity) return ''
-  if (integrity.violations.length === 0) {
-    return `本次生成未新增原简历之外的任何事实（${integrity.checked} 条已校验，0 处异常）`
+  const checked = integrity.checked
+
+  // 老版本没有这几个字段，按规则引擎生成来看
+  const generator = integrity.generator ?? 'rules'
+  const reverted = integrity.reverted ?? 0
+  const degraded = integrity.degraded ?? false
+
+  if (generator === 'llm') {
+    if (reverted > 0) {
+      return `本次由模型生成，有 ${reverted} 处没有采用模型的改写，已换回规则引擎的产出（${checked} 条已校验）`
+    }
+    return `本次由模型生成，未新增原简历之外的任何事实（${checked} 条已校验）`
   }
-  return `本次生成有 ${integrity.violations.length} 处改写没有通过校验，已回退为原文（${integrity.checked} 条已校验）`
+
+  if (degraded) {
+    return `模型这次没有用上，这一版由规则引擎生成（${checked} 条已校验）`
+  }
+
+  if (integrity.violations.length === 0) {
+    return `本次生成未新增原简历之外的任何事实（${checked} 条已校验，0 处异常）`
+  }
+  return `本次生成有 ${integrity.violations.length} 处改写没有通过校验，已回退为原文（${checked} 条已校验）`
+})
+
+/** 这一版的正文是谁写的。老版本没有这个字段，按规则引擎生成来看。 */
+const generatorNotice = computed(() => {
+  const generator = version.value?.integrity?.generator ?? 'rules'
+  if (generator === 'llm') {
+    return '本版本由模型生成，模型写的每一条断言都经过事实校验，没有通过的都换回了规则引擎的产出'
+  }
+  return '本版本由本地规则引擎生成，不是真实模型输出'
+})
+
+const integrityAlertType = computed<'success' | 'warning'>(() => {
+  const integrity = version.value?.integrity
+  if (!integrity) return 'success'
+  const generator = integrity.generator ?? 'rules'
+  const reverted = integrity.reverted ?? 0
+  if (generator === 'llm') return reverted > 0 ? 'warning' : 'success'
+  if (integrity.degraded) return 'warning'
+  return integrity.violations.length === 0 ? 'success' : 'warning'
 })
 
 async function copyText(text: string, label: string): Promise<void> {
@@ -108,7 +145,7 @@ function hasProfile(): boolean {
 
 async function exportPdf(): Promise<void> {
   if (!version.value) return
-  if (useDraftStore().saveIfDirty()) {
+  if (await useDraftStore().saveIfDirty()) {
     ElMessage.info('简历有未保存的修改，已先保存再导出')
   }
 
@@ -165,7 +202,7 @@ async function exportPdf(): Promise<void> {
         type="info"
         show-icon
         :closable="false"
-        title="本版本由本地规则引擎生成，不是真实模型输出"
+        :title="generatorNotice"
       />
 
       <el-card class="card-block">
@@ -182,7 +219,7 @@ async function exportPdf(): Promise<void> {
         </el-descriptions>
         <el-alert
           class="integrity-alert"
-          :type="version.integrity.violations.length === 0 ? 'success' : 'warning'"
+          :type="integrityAlertType"
           show-icon
           :closable="false"
           :title="integrityText"

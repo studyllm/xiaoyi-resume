@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto'
+
 import type { FastifyInstance } from 'fastify'
 
 import type { Draft } from '@xiaoyi/shared/domain/types'
 import { createIdSeed } from '@xiaoyi/shared/domain/ids'
-import { generateVersion } from '@xiaoyi/shared/engines/generateVersion'
+import type { ResumeGenerator } from '@xiaoyi/shared/engines/generator'
 
 import { currentUser } from '../auth/session'
 import type { IdempotencyStore } from '../db/idempotency'
@@ -20,9 +22,9 @@ const DEFAULT_PAGE_SIZE = 20
  */
 export function registerResumeRoutes(
   app: FastifyInstance,
-  deps: { store: Store; idempotency: IdempotencyStore },
+  deps: { store: Store; idempotency: IdempotencyStore; generator: ResumeGenerator },
 ): void {
-  const { store, idempotency } = deps
+  const { store, idempotency, generator } = deps
 
   async function requireUser(request: Parameters<typeof currentUser>[1]) {
     const user = await currentUser(store, request)
@@ -74,7 +76,12 @@ export function registerResumeRoutes(
     const body = request.body as {
       jdText?: unknown
       name?: unknown
-      options?: { allowVerbFronting?: boolean; dropIrrelevantProjects?: boolean }
+      options?: {
+        allowVerbFronting?: boolean
+        dropIrrelevantProjects?: boolean
+        /** 这次要不要用模型改写。默认不用——发不发第三方要用户自己点头。 */
+        useLlm?: boolean
+      }
     }
     if (typeof body?.jdText !== 'string' || !body.jdText.trim()) {
       return sendError(reply, 'JD_EMPTY')
@@ -93,7 +100,7 @@ export function registerResumeRoutes(
     if (!draftRow) return sendError(reply, 'RESUME_NOT_FOUND')
 
     const existing = await store.listVersions(user.id)
-    const result = generateVersion(
+    const result = await generator.generate(
       draftRow.payload,
       body.jdText,
       { now: new Date().toISOString(), engineVersion: 'server-0.1.0' },
@@ -102,6 +109,7 @@ export function registerResumeRoutes(
         existingVersionCount: existing.length,
         allowVerbFronting: body.options?.allowVerbFronting ?? true,
         dropIrrelevantProjects: body.options?.dropIrrelevantProjects ?? true,
+        useLlm: body.options?.useLlm === true,
       },
       createIdSeed(),
     )
@@ -112,6 +120,23 @@ export function registerResumeRoutes(
       userId: user.id,
       payload: version,
       createdAt: new Date(version.createdAt),
+    })
+
+    // 生成日志：审计与算钱靠它。输入用引用，不复制简历正文。
+    await store.addGeneration({
+      userId: user.id,
+      engine: result.trace.engine,
+      model: result.trace.model,
+      promptVersion: result.trace.promptVersion,
+      draftRevision: draftRow.revision,
+      jdHash: jdHashOf(body.jdText),
+      status: result.trace.error ? 'error' : result.trace.degraded ? 'degraded' : 'ok',
+      promptTokens: result.trace.promptTokens,
+      completionTokens: result.trace.completionTokens,
+      claims: version.trace?.claims.length ?? 0,
+      reverted: result.trace.reverted,
+      rawOutput: result.trace.rawOutput,
+      error: result.trace.error,
     })
 
     const payload = { version }
@@ -128,13 +153,9 @@ export function registerResumeRoutes(
     const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(query.pageSize ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE))
 
     const all = await store.listVersions(user.id)
-    const items = all.slice((page - 1) * pageSize, page * pageSize).map((row) => ({
-      id: row.id,
-      name: row.payload.name,
-      jdRoleName: row.payload.jdRoleName,
-      draftRevision: row.payload.draftRevision,
-      createdAt: row.payload.createdAt,
-    }))
+    // 列表返回完整版本：一份简历的版本通常只有几十个，一并返回省掉前端逐个拉详情。
+    // 上限 pageSize 100，最坏情况也就几百 KB。
+    const items = all.slice((page - 1) * pageSize, page * pageSize).map((row) => row.payload)
 
     return { items, page, pageSize, total: all.length }
   })
@@ -176,4 +197,9 @@ export function registerResumeRoutes(
     await store.deleteVersion(user.id, id)
     return reply.code(204).send()
   })
+}
+
+/** JD 的哈希。日志里存它，用来判断是不是同一份 JD——不存 JD 正文。 */
+function jdHashOf(jdText: string): string {
+  return createHash('sha256').update(jdText).digest('hex').slice(0, 32)
 }

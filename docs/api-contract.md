@@ -200,11 +200,12 @@ POST /api/v1/versions
   "name": "美团 前端工程师",
   "options": { "allowVerbFronting": true, "dropIrrelevantProjects": true, "useLlm": false }
 }
-→ 201 { "version": { "id": "ver_…", "name": "…", "integrity": { "checked": 42, "violations": [], "generator": "rules", "reverted": 0 }, "uncovered": [ … ] } }
+→ 201 { "version": { "id": "ver_…", "name": "…", "integrity": { "checked": 42, "violations": [], "generator": "rules", "reverted": 0, "degraded": false, "observations": [] }, "uncovered": [ … ] } }
 ```
 
-- `options.useLlm`：**一次性开关**（`docs/privacy-conclusions.md` §5.1）。`false` 时全程走规则引擎，**简历正文不发给任何第三方**。
-- 响应里的 `integrity` 用 ADR-0003 的新形状（`generator` / `reverted` / `violations[].kind`）。
+- `options.useLlm`：**一次性开关**（`docs/privacy-conclusions.md` §5.1）。**默认 `false`**——要发就得用户点头。`false` 时全程走规则引擎，**简历正文不发给任何第三方**。
+- 响应里的 `integrity` 用 ADR-0003 的新形状（`generator` / `reverted` / `degraded` / `observations` / `violations[].kind`）。
+- `generator` 是 `llm` 时，这一版的正文里有模型写的要点；`degraded` 为真表示这次生成没有完全用上模型。
 - 生成可能耗时（P4 接模型后十秒级），客户端超时设 **30 秒**，超时后按「离线/超时」降级提示，**不重复提交**（靠 `Idempotency-Key`）。
 
 ```http
@@ -212,7 +213,7 @@ GET /api/v1/versions?page=1&pageSize=20
 → 200 { "items": [ { "id": "ver_…", "name": "…", "jdRoleName": "…", "draftRevision": 4, "createdAt": "…" } ], "page": 1, "pageSize": 20, "total": 47 }
 ```
 
-列表项是**摘要**，不含正文——列表要轻。正文走 `GET /api/v1/versions/:id`。
+列表项是**完整版本**。一份简历的版本通常只有几十个，一并返回省掉前端逐个拉详情；`pageSize` 上限 100，最坏情况也就几百 KB。`GET /api/v1/versions/:id` 仍然保留——深链与打印页要能直接按 id 取。
 
 ```http
 GET /api/v1/versions/:id/body?format=markdown

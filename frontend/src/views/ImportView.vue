@@ -197,7 +197,7 @@ async function doSave(): Promise<void> {
     }
   }
 
-  const outcome = draftStore.savePending({ confirmed: true })
+  const outcome = await draftStore.savePending({ confirmed: true })
   if (!outcome.ok) {
     const state = outcome.failure?.state ?? FAILURE_STATES['save-failed']
     ElMessage.error(stateMessage(state, outcome.failure?.vars))

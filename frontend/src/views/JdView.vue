@@ -68,7 +68,7 @@ function parseJd(): void {
   }
 }
 
-function generate(): void {
+async function generate(): Promise<void> {
   if (!draft.value) {
     ElMessage.warning(stateMessage(FAILURE_STATES['generate-no-draft']))
     return
@@ -76,10 +76,10 @@ function generate(): void {
 
   generating.value = true
   try {
-    if (draftStore.saveIfDirty()) {
+    if (await draftStore.saveIfDirty()) {
       ElMessage.info('简历有未保存的修改，已先保存再生成版本')
     }
-    const version = versionStore.generate(draft.value, jdText.value, {
+    const version = await versionStore.generate(jdText.value, {
       versionName: roleName.value.trim() || undefined,
       allowVerbFronting: allowVerbFronting.value,
       dropIrrelevantProjects: dropIrrelevantProjects.value,

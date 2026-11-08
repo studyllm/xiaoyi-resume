@@ -1,8 +1,12 @@
+import { rulesGenerator, createLlmGenerator } from '@xiaoyi/shared/engines/generator'
+
 import { buildApp } from './app'
 import { createSmtpMailer } from './auth/smtp'
 import { createDatabase } from './db/client'
 import { createMemoryIdempotencyStore } from './db/idempotency'
 import { createPostgresStore } from './db/store'
+import { createOpenAiChat } from './llm/client'
+import { llmConfigFromEnv } from './llm/config'
 
 /**
  * 启动服务端。
@@ -24,8 +28,19 @@ const host = process.env.HOST ?? '127.0.0.1'
 
 const database = createDatabase(required('DATABASE_URL'))
 
+// 没配供应商就是没有模型——生成路径走规则引擎，功能不中断。
+const llm = llmConfigFromEnv()
+const generator = llm
+  ? createLlmGenerator({
+      chat: createOpenAiChat(llm),
+      model: llm.model,
+      maxTokens: llm.maxTokens,
+    })
+  : rulesGenerator
+
 const app = buildApp({
   store: createPostgresStore(database),
+  generator,
   idempotency: createMemoryIdempotencyStore(),
   mailer: createSmtpMailer({
     host: required('SMTP_HOST'),

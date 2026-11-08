@@ -7,7 +7,12 @@ import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import { rendersWorkbench, usesDrawer } from '@xiaoyi/shared/domain/breakpoints'
 import { useViewport } from '@/composables/useViewport'
-import { FAILURE_STATES, stateHint, stateTitle } from '@xiaoyi/shared/domain/states'
+import {
+  ALL_STATES,
+  FAILURE_STATES,
+  stateHint,
+  stateTitle,
+} from '@xiaoyi/shared/domain/states'
 import { useDraftStore } from '@/stores/draft'
 import { persistence } from '@/stores/persistence'
 import { useSessionStore } from '@/stores/session'
@@ -143,6 +148,16 @@ async function logout(): Promise<void> {
       class="layout-backdrop"
       aria-hidden="true"
       @click="closeNav"
+    />
+
+    <el-alert
+      v-if="session.offline"
+      class="layout-banner layout-offline"
+      type="warning"
+      show-icon
+      :closable="false"
+      :title="stateTitle(ALL_STATES['offline'])"
+      :description="stateHint(ALL_STATES['offline'])"
     />
 
     <el-container class="layout-body">

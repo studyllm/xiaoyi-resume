@@ -9,6 +9,47 @@ import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
 import WelcomeView from './WelcomeView.vue'
 
+// 服务端的简历读写在测试里 mock 掉：读取按「连不上」处理（退回本地缓存），
+// 保存按成功处理。这样用例的语义不变——本地缓存仍是读的那一份。
+vi.mock('@/api/resume', async () => {
+  const { ApiError } = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  const { ALL_STATES } = await vi.importActual<
+    typeof import('@xiaoyi/shared/domain/states')
+  >('@xiaoyi/shared/domain/states')
+  return {
+    fetchDraft: vi.fn(async () => {
+      throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true)
+    }),
+    saveDraft: vi.fn(async (_draft: unknown, revision: number) => ({
+      revision: revision + 1,
+      savedAt: '2026-01-01T00:00:00.000Z',
+    })),
+    fetchVersions: vi.fn(async () => ({ items: [], total: 0 })),
+    fetchVersion: vi.fn(),
+    createVersion: vi.fn(async () => ({
+      version: {
+        id: 'ver-1',
+        userId: '',
+        name: '版本',
+        profile: { name: '', headline: '', contacts: [] },
+        body: '',
+        sections: [],
+        diff: [],
+        uncovered: [],
+        coverage: [],
+        integrity: { checked: 0, violations: [] },
+        engineVersion: 'x',
+        jdRawText: '',
+        jdRoleName: '',
+        draftRevision: 1,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    })),
+    deleteVersion: vi.fn(async () => undefined),
+  }
+})
+
+
 vi.mock('@/api/client', async () => {
   const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
   return {
@@ -92,25 +133,25 @@ describe('落地页', () => {
   })
 
   it('有自己的简历时主动作是「打开我的简历」', async () => {
-    const { wrapper } = await mountLanding('', () => {
+    const { wrapper } = await mountLanding('', async () => {
       const session = useSessionStore()
       session.user = { id: 'user-李四', email: '李四@example.com' }; session.status = 'user'
       const draftStore = useDraftStore()
       draftStore.ingest('工作经历\n美团 前端工程师 2021.03 - 至今\n· 负责活动页开发')
-      draftStore.savePending()
+      await draftStore.savePending()
     })
     expect(buttonByText(wrapper, '打开我的简历')).toBeTruthy()
   })
 
   it('退出登录后回到「导入我的简历」', async () => {
-    const { wrapper } = await mountLanding('', () => {
+    const { wrapper } = await mountLanding('', async () => {
       const session = useSessionStore()
       session.user = { id: 'user-李四', email: '李四@example.com' }; session.status = 'user'
       const draftStore = useDraftStore()
       draftStore.ingest('工作经历\n美团 前端工程师 2021.03 - 至今\n· 负责活动页开发')
-      draftStore.savePending()
+      await draftStore.savePending()
       { session.user = null; session.status = 'guest' }
-      draftStore.restore()
+      await draftStore.restore()
     })
     expect(buttonByText(wrapper, '导入我的简历')).toBeTruthy()
     expect(

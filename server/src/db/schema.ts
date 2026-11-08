@@ -79,7 +79,8 @@ export const drafts = pgTable('drafts', {
 export const versions = pgTable(
   'versions',
   {
-    id: uuid('id').primaryKey(),
+    // 版本 id 由引擎生成（version-1 这种，可读且可复现），不是 uuid
+    id: text('id').primaryKey(),
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -87,6 +88,46 @@ export const versions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (table) => [index('versions_user_idx').on(table.userId, table.createdAt)],
+)
+
+/**
+ * 生成日志。审计与算钱靠它（ADR-0005 §5）。
+ *
+ * **不复制简历正文**：输入用底稿的修订号引用。存的是模型自己的输出——
+ * 不然「这次生成了什么」无从谈起。
+ */
+export const generations = pgTable(
+  'generations',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    /** 这一版正文是谁写的 */
+    engine: text('engine').notNull(),
+    /** 模型 id。没配供应商时为空 */
+    model: text('model'),
+    /** 提示词版本。变了就换号，用来区分两批输出 */
+    promptVersion: text('prompt_version'),
+    /** 生成时的底稿修订号——输入用引用 */
+    draftRevision: integer('draft_revision'),
+    /** JD 的哈希，用来判断是不是同一份 JD */
+    jdHash: text('jd_hash'),
+    /** ok（模型可用）/ degraded（有回退）/ error（模型不可用） */
+    status: text('status').notNull(),
+    promptTokens: integer('prompt_tokens').notNull().default(0),
+    completionTokens: integer('completion_tokens').notNull().default(0),
+    /** 模型写了几条要点 */
+    claims: integer('claims').notNull().default(0),
+    /** 有多少条没采用模型的产出 */
+    reverted: integer('reverted').notNull().default(0),
+    /** 模型的原始输出 */
+    rawOutput: text('raw_output'),
+    /** 模型不可用时的原因 */
+    error: text('error'),
+  },
+  (table) => [index('generations_user_idx').on(table.userId, table.createdAt)],
 )
 
 export type UserRow = typeof users.$inferSelect
