@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -42,6 +43,24 @@ function filesUnder(root: string): string[] {
   return found
 }
 
+/**
+ * 这个文件会不会被提交。
+ *
+ * 判断依据是 git 的忽略规则：被忽略的文件进不了仓库，不构成风险。
+ * 本地开发要在 `server/.env` 里放服务端的配置——那份文件被忽略，
+ * 守卫不该拦它。规格说的是「不入库」，不是「磁盘上不能存在」。
+ *
+ * 拿不到 git 的判断时（不在仓库里、git 不可用）按会被提交处理——保守。
+ */
+function wouldBeCommitted(file: string): boolean {
+  try {
+    execFileSync('git', ['check-ignore', '-q', '--', file], { cwd: repoRoot, stdio: 'ignore' })
+    return false
+  } catch {
+    return true
+  }
+}
+
 describe('仓库结构', () => {
   it('没有嵌套在别处的源码目录', () => {
     const nested = dirsNamed(repoRoot, 'src').filter((dir) => {
@@ -57,9 +76,20 @@ describe('仓库结构', () => {
       .filter((rel) => {
         const name = basename(rel)
         if (name === '.env.example') return false
-        return name === '.env' || name.startsWith('.env.')
+        if (name !== '.env' && !name.startsWith('.env.')) return false
+        // 被 git 忽略的进不了仓库，不算问题
+        return wouldBeCommitted(join(repoRoot, rel))
       })
     expect(offenders).toEqual([])
+  })
+
+  it('被忽略的环境变量文件不算会被提交', () => {
+    expect(wouldBeCommitted(join(repoRoot, 'server/.env'))).toBe(false)
+    expect(wouldBeCommitted(join(repoRoot, 'server/.env.local'))).toBe(false)
+  })
+
+  it('没被忽略的文件会被提交', () => {
+    expect(wouldBeCommitted(join(repoRoot, 'docs/notes.env'))).toBe(true)
   })
 
   it('忽略规则排除了环境变量文件，只放行样例', () => {

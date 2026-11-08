@@ -1,12 +1,17 @@
 import { rulesGenerator, createLlmGenerator } from '@xiaoyi/shared/engines/generator'
+import { fileURLToPath } from 'node:url'
 
 import { buildApp } from './app'
 import { createSmtpMailer } from './auth/smtp'
+import { loadLocalEnv } from './config/env'
 import { createDatabase } from './db/client'
 import { createMemoryIdempotencyStore } from './db/idempotency'
 import { createPostgresStore } from './db/store'
 import { createOpenAiChat } from './llm/client'
 import { llmConfigFromEnv } from './llm/config'
+
+// 本地开发读服务端目录下的 .env；部署时没有这个文件，忽略。
+loadLocalEnv(fileURLToPath(new URL('..', import.meta.url)))
 
 /**
  * 启动服务端。
@@ -18,6 +23,7 @@ function required(name: string): string {
   const value = process.env[name]
   if (!value) {
     console.error(`缺少环境变量 ${name}`)
+    console.error('本地开发：cp server/.env.example server/.env 后按需修改')
     process.exit(1)
   }
   return value
