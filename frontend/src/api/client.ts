@@ -7,14 +7,23 @@ export class ApiError extends Error {
   readonly state: StateCopy
   readonly field?: string
   readonly requestId?: string
+  /** 连不上服务端（与服务端返回的错误不是一回事）。 */
+  readonly offline: boolean
 
-  constructor(code: ErrorCode | 'UNKNOWN', state: StateCopy, field?: string, requestId?: string) {
+  constructor(
+    code: ErrorCode | 'UNKNOWN',
+    state: StateCopy,
+    field?: string,
+    requestId?: string,
+    offline = false,
+  ) {
     super(state.title)
     this.name = 'ApiError'
     this.code = code
     this.state = state
     this.field = field
     this.requestId = requestId
+    this.offline = offline
   }
 }
 
@@ -38,6 +47,8 @@ export interface ApiOptions {
   body?: unknown
   /** 幂等键。契约 §6：需要它的 POST 必须带。 */
   idempotencyKey?: string
+  /** 额外请求头。乐观并发要用 If-Match 带修订号。 */
+  headers?: Record<string, string>
   signal?: AbortSignal
 }
 
@@ -51,6 +62,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   const headers: Record<string, string> = {}
   if (options.body !== undefined) headers['Content-Type'] = 'application/json'
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey
+  for (const [name, value] of Object.entries(options.headers ?? {})) headers[name] = value
 
   let response: Response
   try {
@@ -64,7 +76,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   } catch (error) {
     // 连不上服务端：给「离线」那一条，不是「出了点问题」
     if (error instanceof DOMException && error.name === 'AbortError') throw error
-    throw new ApiError('UNKNOWN', ALL_STATES['storage-unavailable']!)
+    throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true)
   }
 
   const requestId = response.headers.get('x-request-id') ?? undefined

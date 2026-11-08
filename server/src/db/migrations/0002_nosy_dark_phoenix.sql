@@ -1,0 +1,1 @@
+ALTER TABLE "versions" ALTER COLUMN "id" SET DATA TYPE text;

@@ -153,13 +153,9 @@ export function registerResumeRoutes(
     const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(query.pageSize ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE))
 
     const all = await store.listVersions(user.id)
-    const items = all.slice((page - 1) * pageSize, page * pageSize).map((row) => ({
-      id: row.id,
-      name: row.payload.name,
-      jdRoleName: row.payload.jdRoleName,
-      draftRevision: row.payload.draftRevision,
-      createdAt: row.payload.createdAt,
-    }))
+    // 列表返回完整版本：一份简历的版本通常只有几十个，一并返回省掉前端逐个拉详情。
+    // 上限 pageSize 100，最坏情况也就几百 KB。
+    const items = all.slice((page - 1) * pageSize, page * pageSize).map((row) => row.payload)
 
     return { items, page, pageSize, total: all.length }
   })

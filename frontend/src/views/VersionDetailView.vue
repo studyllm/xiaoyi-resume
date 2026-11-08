@@ -145,7 +145,7 @@ function hasProfile(): boolean {
 
 async function exportPdf(): Promise<void> {
   if (!version.value) return
-  if (useDraftStore().saveIfDirty()) {
+  if (await useDraftStore().saveIfDirty()) {
     ElMessage.info('简历有未保存的修改，已先保存再导出')
   }
 
