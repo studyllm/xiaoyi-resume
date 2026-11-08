@@ -103,6 +103,7 @@ export const saveResume = {
 | `verification_tokens` | `user_id`、`kind`（验证 / 重置）、`token_hash`、`expires_at` | **只存哈希** |
 | `drafts` | `user_id`（唯一）、`payload`（JSONB）、`revision` | 一账号一份底稿 |
 | `versions` | `id`、`user_id`、`payload`（JSONB）、`created_at` | 版本快照，不可变 |
+| `generations` | `user_id`、`engine`、`model`、`prompt_version`、`draft_revision`、`jd_hash`、`status`、`prompt_tokens`、`completion_tokens`、`claims`、`reverted`、`raw_output`、`error` | 生成日志。**输入用引用，不复制简历正文**（ADR-0005 §5） |
 
 简历与版本存 JSONB，不拆关系表——它们是树形结构，硬拆成表比 JSONB 更复杂。**账号隔离靠外键与查询条件，不靠前端**（计划 A3.2 要求后端断言）。
 

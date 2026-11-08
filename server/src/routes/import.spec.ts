@@ -1,3 +1,5 @@
+import { rulesGenerator } from '@xiaoyi/shared/engines/generator'
+
 import { describe, expect, it } from 'vitest'
 
 import { createMemoryMailer } from '../auth/mailer'
@@ -11,6 +13,7 @@ function harness() {
   const mailer = createMemoryMailer()
   const store = createMemoryStore()
   const app = buildApp({
+    generator: rulesGenerator,
     store,
     idempotency: createMemoryIdempotencyStore(),
     mailer,
@@ -58,7 +61,14 @@ const VERSION = {
   diff: [],
   uncovered: [],
   coverage: [],
-  integrity: { checked: 0, violations: [] },
+  integrity: {
+      checked: 0,
+      violations: [],
+      generator: 'rules' as const,
+      reverted: 0,
+      degraded: false,
+      observations: [],
+    },
   engineVersion: 'mock-0.1.0',
   jdRawText: '',
   jdRoleName: '',

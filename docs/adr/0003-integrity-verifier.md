@@ -177,6 +177,8 @@ interface IntegrityReport {
   generator: 'rules' | 'llm'
   /** 有多少条输出要点回退到了规则产出 */
   reverted: number
+  /** 这次生成没有完全用上模型 */
+  degraded: boolean
   /** 只记录未拦截的观察项（如中文实词变更、动词降级） */
   observations: IntegrityObservation[]
 }
@@ -196,7 +198,7 @@ interface IntegrityViolation {
 
 `reason` 从自由文本改成**结构化的 kind + 人话描述**：界面要按类型分组展示（「有 2 处新增了数字」「有 1 处职责被上调」），自由文本做不到。`reason` 保留人话描述，供直接展示。
 
-**实现说明（`fact-ledger-and-verifier`）**：这一轮先把 `IntegrityViolation` 补上 `claimId` / `kind` / `component` 三个可选字段——落库是 jsonb，不需要迁移。`generator` / `reverted` / `observations` 三个字段要等接入 LLM 才有意义，随那一轮变更一起落。
+**实现说明**：`IntegrityViolation` 的 `claimId` / `kind` / `component` 三个可选字段随 `fact-ledger-and-verifier` 落下；`generator` / `reverted` / `degraded` / `observations` 四个字段随 `llm-generator` 落下。都落在 jsonb 里，不需要迁移。
 
 ### 7. schema 预留位（F3）
 

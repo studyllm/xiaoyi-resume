@@ -4,6 +4,7 @@ import type {
   Draft,
   DraftItem,
   DraftSection,
+  IntegrityObservation,
   IntegrityViolation,
   Jd,
   ResumeVersion,
@@ -16,9 +17,9 @@ import { assertCleanOutput } from './forbidden'
 import { parseJd } from './jd'
 import { applyTransforms } from './transforms'
 import {
+  draftTermsOf,
   extractComponents,
   extractFactsByBullet,
-  extractTerms,
   makeClaim,
   verifyClaim,
 } from './ledger'
@@ -50,20 +51,6 @@ interface PlannedItem {
   tailIds: Set<string>
   removed: RemovedBullet[]
   droppedWhole: boolean
-}
-
-/** 底稿全量的中文实词。R5 用它——「这个词在整份底稿里出现过吗」。 */
-function collectDraftTerms(draft: Draft): string[] {
-  const terms: string[] = []
-  for (const section of draft.sections) {
-    for (const item of section.items) {
-      terms.push(...extractTerms(`${item.org ?? ''} ${item.title ?? ''}`))
-      for (const bullet of item.bullets) {
-        terms.push(...extractTerms(bullet.text))
-      }
-    }
-  }
-  return [...new Set(terms)]
 }
 
 export function evaluateJd(draft: Draft, jd: Jd, _ctx: EngineContext): RequirementCoverage[] {
@@ -173,12 +160,13 @@ export function generateVersion(
   }
 
   const integrityViolations: IntegrityViolation[] = []
+  const integrityObservations: IntegrityObservation[] = []
   let checked = 0
 
   // 事实账本：底稿每条要点切成若干 fact，按要点分组。
   // 输出要点只引用**它来源的那条要点**的事实——从别处搬数字进来就查得出来。
   const factsByBullet = extractFactsByBullet(draft)
-  const draftTerms = collectDraftTerms(draft)
+  const draftTerms = draftTermsOf(draft)
 
   const versionSections: VersionSection[] = []
   const diffEntries: DiffEntry[] = []
@@ -212,6 +200,9 @@ export function generateVersion(
           metadataComponents: extractComponents(metadataText),
         })
         checked += 1
+        for (const observation of verdict.observations) {
+          integrityObservations.push({ bulletId: bullet.bulletId, ...observation })
+        }
 
         let finalText = transformed
         if (!verdict.trusted) {
@@ -331,7 +322,14 @@ export function generateVersion(
     diff: diffEntries,
     uncovered,
     coverage: finalCoverage,
-    integrity: { checked, violations: integrityViolations },
+    integrity: {
+      checked,
+      violations: integrityViolations,
+      generator: 'rules',
+      reverted: integrityViolations.length,
+      degraded: false,
+      observations: integrityObservations,
+    },
     engineVersion: ctx.engineVersion,
   }
 
