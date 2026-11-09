@@ -16,6 +16,7 @@
     "verify": "npm --workspace frontend run verify && npm --workspace server run verify",
     "dev:server": "npm --workspace server run dev",
     "db:up": "docker compose up -d postgres",
+    "db:mail": "docker compose --profile mail up -d mailpit",
     "db:down": "docker compose down",
     "db:migrate": "npm --workspace server run db:migrate"
   },

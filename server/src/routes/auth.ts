@@ -5,6 +5,8 @@ import type { FastifyInstance } from 'fastify'
 import { hashPassword, hashToken, normalizeEmail, verifyPassword } from '../db/store'
 import type { Store } from '../db/store'
 import { sendError } from '../http/errors'
+import { errorDetail } from '../http/logger'
+import { describeSmtpFailure } from '../auth/smtp'
 import {
   TOKEN_TTL_MS,
   clearSessionCookie,
@@ -74,9 +76,16 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps): void {
     })
     try {
       await mailer.send(verificationMail(mailConfig, user.email, token))
-    } catch {
+    } catch (error) {
       // 邮件没发出去就把账号删掉——留一个用户激活不了的账号，
       // 用户重试还会撞上「邮箱已注册」。
+      // 失败原因只进日志：用户看到的是「验证邮件没发出去」，排查靠这条日志。
+      // 日志里说清是哪一类失败、失败在哪一步、下一步做什么。
+      const failure = describeSmtpFailure(error)
+      request.log.error(
+        { requestId: request.id, err: errorDetail(error), failure },
+        '验证邮件发送失败',
+      )
       await store.deleteUser(user.id)
       return sendError(reply, 'EMAIL_SEND_FAILED')
     }
@@ -153,7 +162,17 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps): void {
         tokenHash: hashToken(token),
         expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
       })
-      await mailer.send(passwordResetMail(mailConfig, user.email, token))
+      try {
+        await mailer.send(passwordResetMail(mailConfig, user.email, token))
+      } catch (error) {
+        // 无论邮箱存不存在都返回 204（提示不同等于泄露账号注册过），
+        // 发信失败也不例外。失败原因只进日志。
+        const failure = describeSmtpFailure(error)
+        request.log.error(
+          { requestId: request.id, err: errorDetail(error), failure },
+          '重置邮件发送失败',
+        )
+      }
     }
 
     // 无论邮箱存不存在都返回 204——提示不同等于泄露账号注册过
