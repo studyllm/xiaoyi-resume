@@ -7,6 +7,7 @@
 - **落地状态**：21 个端点里**已实现 2 个**（`GET /api/v1/healthz`、`POST /api/v1/draft/parse`），其余随 P3 的后续任务逐个落地。已实现的端点由服务端用例断言与契约一致。
 - **版本**：`/api/v1`
 - **冻结时点**：P3 的第一个任务（T3.1），先于任何服务端代码
+- **冻结后的修正**：`INVALID_CREDENTIALS` 的状态码由 401 改成 403（登录端点不该用「需要登录态」的挑战码）。v1 尚未对外发布、前后端同仓库一起发布，没有已发布的客户端会被打破，因此在 v1 内修掉，不开 v2。
 - **相关文档**：`docs/adr/0002-auth-model.md`（鉴权）、`docs/adr/0004-engine-placement.md`（引擎位置）、`docs/adr/0005-llm-access-shape.md`（模型接入）、`docs/privacy-conclusions.md`（数据口径）、`docs/error-taxonomy.md`（状态与文案）
 
 ---
@@ -153,7 +154,7 @@ POST /api/v1/auth/logout-all
 
 「登出全清」用独立端点，而不是 `logout` 带参数——破坏性范围不同的两个动作不该挤在一个端点里。
 
-**登录失败不区分「邮箱不存在」与「密码不对」**，一律 `401 INVALID_CREDENTIALS`；找回密码同理（ADR-0002 §3）。
+**登录失败不区分「邮箱不存在」与「密码不对」**，一律 `403 INVALID_CREDENTIALS`；找回密码同理（ADR-0002 §3）。**登录端点不用 401**——401 是「这个接口需要登录态」的挑战，登录接口自己就是认证入口，对它回 401 等于说「你得先认证」。
 
 ```http
 POST /api/v1/auth/password-reset
@@ -242,7 +243,7 @@ GET /api/v1/versions/:id/body?format=markdown
 | `code` | HTTP | 什么时候 | 前端状态表条目 |
 | --- | --- | --- | --- |
 | `AUTH_REQUIRED` | 401 | 没有会话或会话过期 | `not-logged-in` |
-| `INVALID_CREDENTIALS` | 401 | 邮箱或密码不对 | `invalid-credentials` ✻ |
+| `INVALID_CREDENTIALS` | 403 | 邮箱或密码不对 | `invalid-credentials` ✻ |
 | `EMAIL_NOT_VERIFIED` | 403 | 邮箱没验证 | `email-not-verified` ✻ |
 | `EMAIL_TAKEN` | 409 | 邮箱已注册 | `email-taken` ✻ |
 | `INVALID_RESET_TOKEN` | 400 | 重置令牌无效或过期 | `invalid-reset-token` ✻ |
@@ -266,9 +267,11 @@ GET /api/v1/versions/:id/body?format=markdown
 **规则**：
 
 - `code` 是**稳定契约**——一旦发布不改语义。要改语义就换 `code`。
+- **一个状态码只说一件事。** `401` 只表示「这个接口需要登录态，而请求没有」；凭据不对是 `403`（服务器理解了请求、也明确知道凭据不匹配，拒绝授权）。同一个状态码同时表达两件事，客户端就没法据此判断该怎么办——按状态码拦截的网关会把「口令打错了」当成「会话过期了」。
 - 每个 `code` 在前端 `states.ts` 里**恰好有一条**状态。有守卫断言这张表与状态表一一对应。
 - 前端遇到**没登记**的 `code`：显示 `INTERNAL_ERROR` 对应的文案，并在控制台记一条。**不把后端的 `message` 直接显示给用户**——那句话没经过状态表的语气检查。
 - `5xx` 一律带 `X-Request-Id`，前端在提示里带上它，用户截图时能定位。
+- `401` 不带 `WWW-Authenticate` 头——这是已知的偏差。认证方式是 cookie 会话，浏览器每个请求都带着 cookie，没有可挑战的认证方案；硬塞一个没注册的 scheme 比不补更糟。
 
 ### 5.1 新增的状态
 
