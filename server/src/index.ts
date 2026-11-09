@@ -2,7 +2,7 @@ import { rulesGenerator, createLlmGenerator } from '@xiaoyi/shared/engines/gener
 import { fileURLToPath } from 'node:url'
 
 import { buildApp } from './app'
-import { createSmtpMailer, checkSmtpConfig } from './auth/smtp'
+import { createSmtpMailer, checkSmtp, checkSmtpConfig } from './auth/smtp'
 import { loadLocalEnv } from './config/env'
 import { createDatabase } from './db/client'
 import { createMemoryIdempotencyStore } from './db/idempotency'
@@ -65,12 +65,29 @@ console.log(
   `SMTP：${smtpConfig.host}:${smtpConfig.port}（${smtpConfig.secure ? '隐式 TLS' : '明文'}）`,
 )
 
+const mailer = createSmtpMailer(smtpConfig)
+
+// 启动时自检发信：只登录不发信。
+// 配置错了要在这里就知道——等到用户点注册，看到的只是一个 502 和一句
+// 「验证邮件没发出去」，排查得从头猜。
+//
+// 认证被拒不阻止启动：邮件只影响注册与找回密码，解析、编辑、导出都还能用。
+// 但要说清会坏在哪、怎么修。
+const smtpCheck = await checkSmtp(mailer)
+if (smtpCheck.ok) {
+  console.log('SMTP 自检通过')
+} else {
+  console.warn(`SMTP 自检失败：${smtpCheck.failure!.reason}`)
+  console.warn(`  ${smtpCheck.failure!.hint}`)
+  console.warn('  注册与找回密码会失败，直到改好配置。别的功能不受影响。')
+}
+
 const app = buildApp({
   store: createPostgresStore(database),
   generator,
   llm: llm ? { model: llm.model } : null,
   idempotency: createMemoryIdempotencyStore(),
-  mailer: createSmtpMailer(smtpConfig),
+  mailer,
   siteUrl: required('SITE_URL'),
   from: required('MAIL_FROM'),
 })

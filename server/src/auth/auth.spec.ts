@@ -45,17 +45,39 @@ function harness(
 function switchableMailer() {
   const sent: OutgoingMail[] = []
   let failing = false
+  let refusingAuth = false
+  const refuse = (): never => {
+    if (refusingAuth) {
+      const error = new Error('Invalid login: 526 Authentication failure[0]') as Error & {
+        code?: string
+        command?: string
+        responseCode?: number
+      }
+      error.code = 'EAUTH'
+      error.command = 'AUTH PLAIN'
+      error.responseCode = 526
+      throw error
+    }
+    const error = new Error('connect ECONNREFUSED 127.0.0.1:1025') as Error & { code?: string }
+    error.code = 'ECONNREFUSED'
+    throw error
+  }
   return {
     sent,
     fail(): void {
       failing = true
     },
+    /** 让发信以「认证被拒」失败——真实服务商最常见的那个错。 */
+    refuseAuth(): void {
+      failing = true
+      refusingAuth = true
+    },
     async send(mail: OutgoingMail): Promise<void> {
       sent.push(mail)
-      if (!failing) return
-      const error = new Error('connect ECONNREFUSED 127.0.0.1:1025') as Error & { code?: string }
-      error.code = 'ECONNREFUSED'
-      throw error
+      if (failing) refuse()
+    },
+    async verify(): Promise<void> {
+      if (failing) refuse()
     },
   }
 }
@@ -404,6 +426,28 @@ describe('发信失败', () => {
     expect(log).toContain('验证邮件发送失败')
     expect(log).toContain('ECONNREFUSED')
     expect(log).toContain('127.0.0.1:1025')
+    // 说清是哪一类失败、下一步做什么
+    expect(log).toContain('连不上 SMTP')
+  })
+
+  it('注册发信被拒时，日志里说得出是授权码的事', async () => {
+    const { options, lines } = capturingLogger()
+    const mailer = switchableMailer()
+    mailer.refuseAuth()
+    const h = harness({ mailer, log: options })
+
+    await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { email: 'someone@example.com', password: PASSWORD },
+    })
+
+    const log = lines.join('')
+    expect(log).toContain('SMTP 认证被拒')
+    expect(log).toContain('授权码')
+    // 失败发生在哪一步与 SMTP 状态码也在日志里
+    expect(log).toContain('AUTH PLAIN')
+    expect(log).toContain('526')
   })
 
   it('注册发信失败时，账号被删掉——重试不会撞上「邮箱已注册」', async () => {
