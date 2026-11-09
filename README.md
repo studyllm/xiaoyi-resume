@@ -41,6 +41,7 @@
 npm install          # 仓库根——npm workspace，一次装好前端、服务端与共享包
 cp server/.env.example server/.env   # 服务端的配置放这个文件里，按需修改
 npm run db:up        # 起 Postgres
+npm run db:mail      # 起 Mailpit——验证邮件在 http://localhost:8025 里看
 npm run db:migrate   # 跑迁移，建表
 npm run dev          # 前端 http://localhost:5173
 npm run dev:server   # 服务端 http://localhost:3000（另开一个终端）
@@ -49,6 +50,8 @@ npm run dev:server   # 服务端 http://localhost:3000（另开一个终端）
 打开 http://localhost:5173 。落地页上点「用示例简历试一遍」，不需要自备简历就能走通全流程——它会在服务端建一个临时的演示账号。
 
 **`.env` 那一步不能省。** 服务端的配置全部来自环境变量，没复制这个文件，服务端会以「缺少环境变量 DATABASE_URL」退出；后端起不来时，页面上只会看到一个开发代理转出来的 500。
+
+**`db:mail` 那一步也不能省。** Mailpit 是收信用的本地邮件服务，它不在 `db:up` 里（默认不起）。没起它，注册接口会以 502「验证邮件没发出去」失败——SMTP 连不上 127.0.0.1:1025。
 
 前端在 5173、服务端在 3000，**开发时前端走 Vite 代理访问 `/api`**——同源，不用管 CORS，session cookie 也不用管 SameSite 与凭证。
 
@@ -61,6 +64,7 @@ npm run dev:server   # 服务端 http://localhost:3000（另开一个终端）
 | `npm run build` | 类型检查 + 构建 |
 | `npm run verify` | **门禁**：类型检查 → 全量并行测试 → 打乱顺序测试 → 构建（前端 + 服务端） |
 | `npm run db:up` / `db:down` | 起 / 停 Postgres |
+| `npm run db:mail` | 起 Mailpit（收验证邮件，界面在 http://localhost:8025） |
 | `npm run db:migrate` | 跑数据库迁移 |
 
 ## 开发

@@ -16,7 +16,9 @@ export interface ErrorCodeSpec {
 
 export const ERROR_CODES = {
   AUTH_REQUIRED: { http: 401, state: 'not-logged-in' },
-  INVALID_CREDENTIALS: { http: 401, state: 'invalid-credentials' },
+  // 凭据不对不是「缺少登录态」——401 只留给 AUTH_REQUIRED。
+  // 服务器理解了请求、也明确知道凭据不匹配，拒绝授权就是 403（RFC 9110 §15.5.4）。
+  INVALID_CREDENTIALS: { http: 403, state: 'invalid-credentials' },
   EMAIL_NOT_VERIFIED: { http: 403, state: 'email-not-verified' },
   EMAIL_TAKEN: { http: 409, state: 'email-taken' },
   INVALID_RESET_TOKEN: { http: 400, state: 'invalid-reset-token' },

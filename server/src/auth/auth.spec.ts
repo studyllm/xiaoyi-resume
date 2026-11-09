@@ -1,8 +1,12 @@
 import { rulesGenerator } from '@xiaoyi/shared/engines/generator'
+import { Writable } from 'node:stream'
 
 import { describe, expect, it } from 'vitest'
 
+import type { FastifyLoggerOptions } from 'fastify'
+
 import { createMemoryMailer } from './mailer'
+import type { MailSender, OutgoingMail } from './mailer'
 import { buildApp } from '../app'
 import { createMemoryIdempotencyStore } from '../db/idempotency'
 import { createMemoryStore } from '../db/store'
@@ -11,12 +15,14 @@ const PASSWORD = 'correct horse battery'
 
 interface Harness {
   app: ReturnType<typeof buildApp>
-  mailer: ReturnType<typeof createMemoryMailer>
+  mailer: MailSender & { sent: OutgoingMail[] }
   store: ReturnType<typeof createMemoryStore>
 }
 
-function harness(): Harness {
-  const mailer = createMemoryMailer()
+function harness(
+  options: { mailer?: MailSender & { sent: OutgoingMail[] }; log?: boolean | FastifyLoggerOptions } = {},
+): Harness {
+  const mailer = options.mailer ?? createMemoryMailer()
   const store = createMemoryStore()
   const app = buildApp({
     generator: rulesGenerator,
@@ -26,8 +32,66 @@ function harness(): Harness {
     mailer,
     siteUrl: 'http://localhost:5173',
     from: 'noreply@xiaoyi.example',
+    ...(options.log === undefined ? {} : { log: options.log }),
   })
   return { app, mailer, store }
+}
+
+/**
+ * 平时发得出去，出错时才失败——用来测「发信失败时」的行为。
+ *
+ * 失败模拟 SMTP 连不上：这类错误对象上带着机器可读的 `code`。
+ */
+function switchableMailer() {
+  const sent: OutgoingMail[] = []
+  let failing = false
+  let refusingAuth = false
+  const refuse = (): never => {
+    if (refusingAuth) {
+      const error = new Error('Invalid login: 526 Authentication failure[0]') as Error & {
+        code?: string
+        command?: string
+        responseCode?: number
+      }
+      error.code = 'EAUTH'
+      error.command = 'AUTH PLAIN'
+      error.responseCode = 526
+      throw error
+    }
+    const error = new Error('connect ECONNREFUSED 127.0.0.1:1025') as Error & { code?: string }
+    error.code = 'ECONNREFUSED'
+    throw error
+  }
+  return {
+    sent,
+    fail(): void {
+      failing = true
+    },
+    /** 让发信以「认证被拒」失败——真实服务商最常见的那个错。 */
+    refuseAuth(): void {
+      failing = true
+      refusingAuth = true
+    },
+    async send(mail: OutgoingMail): Promise<void> {
+      sent.push(mail)
+      if (failing) refuse()
+    },
+    async verify(): Promise<void> {
+      if (failing) refuse()
+    },
+  }
+}
+
+/** 把日志输出接到自己的流上，好断言日志里有什么。 */
+function capturingLogger(): { options: FastifyLoggerOptions; lines: string[] } {
+  const lines: string[] = []
+  const stream = new Writable({
+    write(chunk, _encoding, callback) {
+      lines.push(String(chunk))
+      callback()
+    },
+  })
+  return { options: { level: 'error', stream }, lines }
 }
 
 /** 从验证邮件里取出令牌。 */
@@ -37,6 +101,20 @@ function tokenFromMail(mailer: Harness['mailer']): string {
   const match = /token=([^\s&]+)/.exec(mail!.text)
   expect(match).not.toBeNull()
   return decodeURIComponent(match![1]!)
+}
+
+/** 注册并验证邮箱——之后这个账号可以登录。 */
+async function registerAndVerify(h: Harness): Promise<void> {
+  await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/register',
+    payload: { email: 'someone@example.com', password: PASSWORD },
+  })
+  await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/verify-email',
+    payload: { token: tokenFromMail(h.mailer) },
+  })
 }
 
 describe('注册与验证', () => {
@@ -116,19 +194,6 @@ describe('注册与验证', () => {
 })
 
 describe('登录', () => {
-  async function registerAndVerify(h: Harness): Promise<void> {
-    await h.app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
-    })
-    await h.app.inject({
-      method: 'POST',
-      url: '/api/v1/auth/verify-email',
-      payload: { token: tokenFromMail(h.mailer) },
-    })
-  }
-
   it('用邮箱与密码登录', async () => {
     const h = harness()
     await registerAndVerify(h)
@@ -162,7 +227,7 @@ describe('登录', () => {
     expect(response.json().error.code).toBe('EMAIL_NOT_VERIFIED')
   })
 
-  it('邮箱不存在与密码不对的提示完全相同', async () => {
+  it('凭据不对回 403，不占用 401', async () => {
     const h = harness()
     await registerAndVerify(h)
 
@@ -177,8 +242,8 @@ describe('登录', () => {
       payload: { email: 'someone@example.com', password: 'wrong password' },
     })
 
-    expect(noSuchEmail.statusCode).toBe(401)
-    expect(wrongPassword.statusCode).toBe(401)
+    expect(noSuchEmail.statusCode).toBe(403)
+    expect(wrongPassword.statusCode).toBe(403)
     expect(noSuchEmail.json()).toEqual(wrongPassword.json())
   })
 
@@ -322,7 +387,7 @@ describe('找回密码', () => {
       url: '/api/v1/auth/login',
       payload: { email: 'someone@example.com', password: PASSWORD },
     })
-    expect(oldPassword.statusCode).toBe(401)
+    expect(oldPassword.statusCode).toBe(403)
 
     const newPassword = await h.app.inject({
       method: 'POST',
@@ -338,5 +403,125 @@ describe('找回密码', () => {
       cookies: { session: sessionCookie },
     })
     expect(after.statusCode).toBe(401)
+  })
+})
+
+describe('发信失败', () => {
+  it('注册发信失败时，日志里说得出原因', async () => {
+    const { options, lines } = capturingLogger()
+    const mailer = switchableMailer()
+    mailer.fail()
+    const h = harness({ mailer, log: options })
+
+    const response = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { email: 'someone@example.com', password: PASSWORD },
+    })
+
+    expect(response.statusCode).toBe(502)
+    expect(response.json().error.code).toBe('EMAIL_SEND_FAILED')
+
+    const log = lines.join('')
+    expect(log).toContain('验证邮件发送失败')
+    expect(log).toContain('ECONNREFUSED')
+    expect(log).toContain('127.0.0.1:1025')
+    // 说清是哪一类失败、下一步做什么
+    expect(log).toContain('连不上 SMTP')
+  })
+
+  it('注册发信被拒时，日志里说得出是授权码的事', async () => {
+    const { options, lines } = capturingLogger()
+    const mailer = switchableMailer()
+    mailer.refuseAuth()
+    const h = harness({ mailer, log: options })
+
+    await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { email: 'someone@example.com', password: PASSWORD },
+    })
+
+    const log = lines.join('')
+    expect(log).toContain('SMTP 认证被拒')
+    expect(log).toContain('授权码')
+    // 失败发生在哪一步与 SMTP 状态码也在日志里
+    expect(log).toContain('AUTH PLAIN')
+    expect(log).toContain('526')
+  })
+
+  it('注册发信失败时，账号被删掉——重试不会撞上「邮箱已注册」', async () => {
+    const { options } = capturingLogger()
+    const mailer = switchableMailer()
+    mailer.fail()
+    const h = harness({ mailer, log: options })
+
+    await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { email: 'someone@example.com', password: PASSWORD },
+    })
+
+    expect(await h.store.findUserByEmail('someone@example.com')).toBeNull()
+  })
+
+  it('日志里不出现令牌与收件邮箱', async () => {
+    const { options, lines } = capturingLogger()
+    const mailer = switchableMailer()
+    mailer.fail()
+    const h = harness({ mailer, log: options })
+
+    await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { email: 'someone@example.com', password: PASSWORD },
+    })
+
+    const token = /token=([^\s&]+)/.exec(h.mailer.sent[0]!.text)![1]!
+    const log = lines.join('')
+    expect(log).not.toContain('someone@example.com')
+    expect(log).not.toContain(token)
+  })
+
+  it('找回密码发信失败时仍返回 204，原因进日志', async () => {
+    const { options, lines } = capturingLogger()
+    const mailer = switchableMailer()
+    const h = harness({ mailer, log: options })
+    await registerAndVerify(h)
+    mailer.fail()
+
+    const response = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/password-reset',
+      payload: { email: 'someone@example.com' },
+    })
+
+    expect(response.statusCode).toBe(204)
+    const log = lines.join('')
+    expect(log).toContain('重置邮件发送失败')
+    expect(log).toContain('ECONNREFUSED')
+  })
+
+  it('发信失败也不暴露邮箱是否存在', async () => {
+    const { options } = capturingLogger()
+    const mailer = switchableMailer()
+    const h = harness({ mailer, log: options })
+    await registerAndVerify(h)
+    mailer.fail()
+
+    const registered = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/password-reset',
+      payload: { email: 'someone@example.com' },
+    })
+    const unknown = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/password-reset',
+      payload: { email: 'nobody@example.com' },
+    })
+
+    expect(registered.statusCode).toBe(204)
+    expect(unknown.statusCode).toBe(204)
+    expect(registered.body).toEqual(unknown.body)
   })
 })

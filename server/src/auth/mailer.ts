@@ -15,6 +15,12 @@ export interface OutgoingMail {
 
 export interface MailSender {
   send(mail: OutgoingMail): Promise<void>
+  /**
+   * 只登录不发信，验证明明这组配置能用。
+   *
+   * 启动时拿它自检：配置错了要在启动时就知道，而不是等用户点注册才发现。
+   */
+  verify(): Promise<void>
 }
 
 /** 站点对外的地址。验证与重置链接都指向它。 */
@@ -36,6 +42,9 @@ export function createMemoryMailer(): MailSender & { sent: OutgoingMail[] } {
     sent,
     async send(mail) {
       sent.push(mail)
+    },
+    async verify() {
+      // 内存发信器没有远端可验——发得出去就是能用。
     },
   }
 }
