@@ -162,7 +162,7 @@ describe('登录', () => {
     expect(response.json().error.code).toBe('EMAIL_NOT_VERIFIED')
   })
 
-  it('邮箱不存在与密码不对的提示完全相同', async () => {
+  it('凭据不对回 403，不占用 401', async () => {
     const h = harness()
     await registerAndVerify(h)
 
@@ -177,8 +177,8 @@ describe('登录', () => {
       payload: { email: 'someone@example.com', password: 'wrong password' },
     })
 
-    expect(noSuchEmail.statusCode).toBe(401)
-    expect(wrongPassword.statusCode).toBe(401)
+    expect(noSuchEmail.statusCode).toBe(403)
+    expect(wrongPassword.statusCode).toBe(403)
     expect(noSuchEmail.json()).toEqual(wrongPassword.json())
   })
 
@@ -322,7 +322,7 @@ describe('找回密码', () => {
       url: '/api/v1/auth/login',
       payload: { email: 'someone@example.com', password: PASSWORD },
     })
-    expect(oldPassword.statusCode).toBe(401)
+    expect(oldPassword.statusCode).toBe(403)
 
     const newPassword = await h.app.inject({
       method: 'POST',
