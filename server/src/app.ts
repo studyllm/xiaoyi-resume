@@ -1,11 +1,11 @@
 import cookie from '@fastify/cookie'
-import Fastify, { type FastifyInstance } from 'fastify'
+import Fastify, { type FastifyInstance, type FastifyLoggerOptions } from 'fastify'
 
 import type { ResumeGenerator } from '@xiaoyi/shared/engines/generator'
 
 import type { MailSender } from './auth/mailer'
 import type { IdempotencyStore } from './db/idempotency'
-import { requestIdOf } from './http/logger'
+import { errorDetail, requestIdOf } from './http/logger'
 import type { Store } from './db/store'
 import { registerAuthRoutes } from './routes/auth'
 import { registerEngineRoutes } from './routes/engine'
@@ -25,8 +25,11 @@ export interface AppDeps {
   siteUrl: string
   /** 发信人地址。 */
   from: string
-  /** 结构化日志开关。测试里传 false 关掉，免得输出污染用例。 */
-  log?: boolean
+  /**
+   * 日志。`false` 关掉——测试里关掉，免得输出污染用例。
+   * 给对象就按它配置：断言日志内容时把输出接到自己的流上。
+   */
+  log?: boolean | FastifyLoggerOptions
   /**
    * 版本生成器。规则引擎与模型是同一个接口的两个实现（ADR-0005 §2）——
    * 路由不关心用的是哪个。
@@ -67,9 +70,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.setErrorHandler((error: unknown, request, reply) => {
     // 错误上报只带上下文，不带请求体
-    const detail =
-      error instanceof Error ? { message: error.message, name: error.name } : { message: '未知错误' }
-    request.log.error({ requestId: request.id, url: request.url, err: detail }, '请求出错')
+    request.log.error({ requestId: request.id, url: request.url, err: errorDetail(error) }, '请求出错')
     reply.code(500).send({
       error: { code: 'INTERNAL_ERROR', message: '出了点问题。刷新一下再试。' },
     })

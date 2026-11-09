@@ -1,0 +1,61 @@
+## Why
+
+调注册接口返回 502：
+
+```json
+{"error":{"code":"EMAIL_SEND_FAILED","message":"验证邮件没发出去"}}
+```
+
+**服务端日志里一个字都没有。** 只有「收到请求」和「请求完成 statusCode 502」两行——邮件为什么发不出去，一个字都没说。
+
+根因在 `server/src/routes/auth.ts` 的注册处理器：
+
+```ts
+try {
+  await mailer.send(verificationMail(mailConfig, user.email, token))
+} catch {
+  await store.deleteUser(user.id)
+  return sendError(reply, 'EMAIL_SEND_FAILED')
+}
+```
+
+`catch {}` 把错误整个吞掉。SMTP 到底为什么失败——连不上、认证被拒、超时、地址非法——全都没了。排障只能靠猜。
+
+**实际原因**是本地环境少了一半：`docker compose ps` 只有 postgres，**Mailpit 没起**（它在 `profiles: ['mail']` 里，README 的快速开始只让跑 `npm run db:up`），SMTP 连 127.0.0.1:1025 连不上。
+
+## What Changes
+
+- 注册发信失败时把失败原因记进服务端日志：`requestId` + 错误的名称、消息与机器可读的码（`ECONNREFUSED`、`535` 之类）。这是这次要的。
+- 找回密码的发信失败同样记日志——现在它根本没被接住，冒泡成 500，用户看到的是「出了点问题」。
+- 找回密码发信失败**仍然返回 204**：这个端点无论邮箱存不存在都返回 204（不泄露账号注册过），发信失败也不例外。现在的 500 只在「邮箱已注册」时出现——**等于用状态码泄露了账号是否存在**，与契约和 ADR-0002 §3 相悖。
+- **SMTP 端口与加密方式不匹配时，服务端启动就退出并说清怎么改。** 465 是隐式 TLS 端口（RFC 8314），拿明文去连它，对面会直接掐断连接，报出来的是「Connection closed unexpectedly」——看不出是哪配错了。这是「带着半套配置跑起来的服务端比不启动更糟」（runbook §1.1）。
+- 启动时把生效的发信目标（主机、端口、加密方式）打出来——配错时从这一行就能看出来。
+- README 的快速开始补上 Mailpit 的启动步骤。本地默认只起 postgres，注册链路默认就是坏的。
+
+## Capabilities
+
+### New Capabilities
+
+无。
+
+### Modified Capabilities
+
+- `account-access`: 新增「发信失败要留下可定位的记录」与「发信配置错了要在启动时暴露」，并给「找回密码」补上「不因发信失败泄露账号是否存在」
+
+## Impact
+
+**代码**
+
+- `server/src/routes/auth.ts`：注册与找回密码两处发信失败的处理
+- `server/src/auth/smtp.ts`：SMTP 配置自检
+- `server/src/http/logger.ts`：错误明细的提取（`app.ts` 里已有的同一段逻辑挪过来共用）
+- `server/src/app.ts`：改用共用的错误明细提取，行为不变
+- `server/src/auth/auth.spec.ts`、`server/src/auth/smtp.spec.ts`：回归用例
+- `README.md`、`server/.env.example`：本地环境说明
+
+**不受影响**
+
+- 不改任何端点的路径、方法、请求体与响应体结构
+- 不改 `EMAIL_SEND_FAILED` 这个码与它的用户文案
+- 不记收件邮箱、不记令牌、不记简历正文——项目的脱敏口径（`docs/privacy-conclusions.md` §4.5）把它们列为要脱敏的项
+- 不动 `verifyPassword` 里的 `catch`（哈希串格式不对按不匹配处理，那是有意的）

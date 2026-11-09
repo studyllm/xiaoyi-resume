@@ -16,6 +16,23 @@ export interface SmtpConfig {
 }
 
 /**
+ * SMTP 配置的自检。
+ *
+ * 端口与加密方式不匹配是最常见的一种「半套配置」：**465 是隐式 TLS 端口**，
+ * 用明文去连它，对面会直接掐断连接，报出来的是「Connection closed
+ * unexpectedly」——看不出是哪配错了。宁可起不来，也不要让人对着那句话猜
+ * （`docs/ops/runbook.md` §1.1：带着半套配置跑起来的服务端比不启动更糟）。
+ *
+ * 只查这一条：它是标准端口（RFC 8314），没有歧义。别的端口用哪种加密由
+ * 服务商说了算，服务端不替它猜。
+ */
+export function checkSmtpConfig(config: SmtpConfig): void {
+  if (config.port === 465 && !config.secure) {
+    throw new Error('SMTP 端口 465 是隐式 TLS 端口，SMTP_SECURE 必须是 true')
+  }
+}
+
+/**
  * SMTP 发信。
  *
  * 走 SMTP 而不是各家 SDK：阿里云邮件推送提供 SMTP 入口，

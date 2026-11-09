@@ -2,7 +2,7 @@ import { rulesGenerator, createLlmGenerator } from '@xiaoyi/shared/engines/gener
 import { fileURLToPath } from 'node:url'
 
 import { buildApp } from './app'
-import { createSmtpMailer } from './auth/smtp'
+import { createSmtpMailer, checkSmtpConfig } from './auth/smtp'
 import { loadLocalEnv } from './config/env'
 import { createDatabase } from './db/client'
 import { createMemoryIdempotencyStore } from './db/idempotency'
@@ -44,19 +44,33 @@ const generator = llm
     })
   : rulesGenerator
 
+const smtpConfig = {
+  host: required('SMTP_HOST'),
+  port: Number(process.env.SMTP_PORT ?? 465),
+  user: required('SMTP_USER'),
+  pass: required('SMTP_PASS'),
+  from: required('MAIL_FROM'),
+  secure: process.env.SMTP_SECURE !== 'false',
+}
+
+try {
+  checkSmtpConfig(smtpConfig)
+} catch (error) {
+  console.error(error instanceof Error ? error.message : 'SMTP 配置有问题')
+  process.exit(1)
+}
+
+// 生效的发信目标写出来：端口与加密方式配错时，从这行就能看出来。
+console.log(
+  `SMTP：${smtpConfig.host}:${smtpConfig.port}（${smtpConfig.secure ? '隐式 TLS' : '明文'}）`,
+)
+
 const app = buildApp({
   store: createPostgresStore(database),
   generator,
   llm: llm ? { model: llm.model } : null,
   idempotency: createMemoryIdempotencyStore(),
-  mailer: createSmtpMailer({
-    host: required('SMTP_HOST'),
-    port: Number(process.env.SMTP_PORT ?? 465),
-    user: required('SMTP_USER'),
-    pass: required('SMTP_PASS'),
-    from: required('MAIL_FROM'),
-    secure: process.env.SMTP_SECURE !== 'false',
-  }),
+  mailer: createSmtpMailer(smtpConfig),
   siteUrl: required('SITE_URL'),
   from: required('MAIL_FROM'),
 })

@@ -20,3 +20,20 @@ export function requestIdOf(headers: Record<string, unknown>): string {
  * 耗时，不记请求体；下面两个钩子也只带上下文。
  */
 export const LOGGED_FIELDS = ['requestId', 'method', 'url', 'statusCode'] as const
+
+/**
+ * 错误的可记录明细。
+ *
+ * **只取白名单字段**，不把错误对象整个丢出去——第三方错误对象上可能带着
+ * 认证信息。`code` 是机器可读的那一份（`ECONNREFUSED`、SMTP 的 `535`），
+ * 排障时比 `message` 更好用。
+ */
+export function errorDetail(error: unknown): { name: string; message: string; code?: string } {
+  if (!(error instanceof Error)) return { name: 'Error', message: '未知错误' }
+  const code = (error as { code?: unknown }).code
+  return {
+    name: error.name,
+    message: error.message,
+    ...(typeof code === 'string' ? { code } : {}),
+  }
+}
