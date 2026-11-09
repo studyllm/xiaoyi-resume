@@ -30,7 +30,7 @@ frontend/src/
   pdf/        浏览器专属能力（pdf.js 提取 PDF 文字层，不进共享包）
   mock/       演示数据与固定样例
 packages/shared/    前后端共享的那份源码（npm workspace，@xiaoyi/shared）
-  src/domain/       纯数据类型与工具（types / time / ids / sectionFields / states / breakpoints）
+  src/domain/       纯数据类型与工具（types / time / ids / sectionFields / states / breakpoints / links）
   src/engines/      规则引擎：解析、诊断、JD 解析、版本生成、批注锚定、禁用词
   src/contracts/    契约：错误码表与请求响应 schema
 server/       服务端（Node 工作区，P3 起）
