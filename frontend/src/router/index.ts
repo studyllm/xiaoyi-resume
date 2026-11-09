@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { FAILURE_STATES, stateMessage } from '@xiaoyi/shared/domain/states'
+import { RESET_PASSWORD_PATH, VERIFY_EMAIL_PATH } from '@xiaoyi/shared/domain/links'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
 import { useUiStore } from '@/stores/ui'
@@ -73,6 +74,22 @@ const router = createRouter({
       name: 'version-print',
       component: () => import('@/views/VersionPrintView.vue'),
       meta: { title: '打印简历' },
+    },
+    // 从邮件链接进来的两个页面。放在顶层、不进工作台布局：它们是一次性的，
+    // 顶栏与侧栏对刚点开邮件链接、还没登录的人没有意义。
+    // **public 是必须的**——验证邮箱这个动作本身就是建立登录态的地方
+    // （服务端在 verify-email 里直接建会话），进来之前没有登录态。
+    {
+      path: VERIFY_EMAIL_PATH,
+      name: 'verify-email',
+      component: () => import('@/views/VerifyEmailView.vue'),
+      meta: { public: true, title: '验证邮箱' },
+    },
+    {
+      path: RESET_PASSWORD_PATH,
+      name: 'reset-password',
+      component: () => import('@/views/ResetPasswordView.vue'),
+      meta: { public: true, title: '重置密码' },
     },
     { path: '/:pathMatch(.*)*', redirect: '/draft' },
   ],

@@ -1,3 +1,5 @@
+import { RESET_PASSWORD_PATH, VERIFY_EMAIL_PATH } from '@xiaoyi/shared/domain/links'
+
 /**
  * 发信。
  *
@@ -40,11 +42,11 @@ export function createMemoryMailer(): MailSender & { sent: OutgoingMail[] } {
 
 /** 链接里的令牌要能被邮件客户端正确解析，别让它把后面的参数吃掉。 */
 function verificationLink(config: MailConfig, token: string): string {
-  return `${config.siteUrl}/verify-email?token=${encodeURIComponent(token)}`
+  return `${config.siteUrl}${VERIFY_EMAIL_PATH}?token=${encodeURIComponent(token)}`
 }
 
 function resetLink(config: MailConfig, token: string): string {
-  return `${config.siteUrl}/reset-password?token=${encodeURIComponent(token)}`
+  return `${config.siteUrl}${RESET_PASSWORD_PATH}?token=${encodeURIComponent(token)}`
 }
 
 export function verificationMail(config: MailConfig, to: string, token: string): OutgoingMail {
