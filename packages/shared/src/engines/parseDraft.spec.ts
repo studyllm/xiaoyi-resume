@@ -431,3 +431,47 @@ describe('parseDraft 的条目头切分', () => {
     expect(items[0]!.end).toBeNull()
   })
 })
+
+describe('parseDraft 的表格', () => {
+  it('认出列标题行，之后的行不当条目头，内容进「其它」分区', () => {
+    const result = parseDraft(
+      `项目经历
+时间 项目名称 核心职责与成果
+2018.11 云宠
+主导电商核心商品模型设计
+2019.04 商平台
+`,
+      CTX,
+      createIdSeed(),
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    // 表格不是经历条目
+    expect(sectionOf(result.draft!, 'project').items).toHaveLength(0)
+    // 内容原样保留，不假装它是经历
+    const texts = sectionOf(result.draft!, 'other').items.flatMap((item) =>
+      item.bullets.map((bullet) => bullet.text),
+    )
+    expect(texts).toContain('时间 项目名称 核心职责与成果')
+    expect(texts).toContain('2018.11 云宠')
+    expect(texts).toContain('2019.04 商平台')
+  })
+
+  it('普通要点不会被误判成表格', () => {
+    // 判错的代价很大：整个分区剩下的行都会变成要点，条目全部消失
+    const result = parseDraft(
+      `工作经历
+甲公司 前端工程师 2021.03 - 至今
+· 负责 前端 后端
+· 另一条要点
+`,
+      CTX,
+      createIdSeed(),
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(sectionOf(result.draft!, 'experience').items).toHaveLength(1)
+  })
+})
