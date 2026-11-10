@@ -7,6 +7,26 @@ export interface DraftResponse {
   updatedAt: string
 }
 
+/** 解析结果。形状与服务端 `POST /api/v1/draft/parse` 的响应一致。 */
+export interface ParseResponse {
+  draft: Draft
+  confidence: number
+  warnings: string[]
+  /** 被放进「其它」分区的那些表头。 */
+  otherHeaders: string[]
+}
+
+/**
+ * 解析简历正文。
+ *
+ * **公开端点**——导入页允许未登录的人粘贴、解析、在纸上修改（ADR-0002 §2）。
+ * 纯计算不落库：解析结果拿回来供编辑，用户点保存时才 PUT 上去，服务端在保存
+ * 时校验（契约 §4.2）。
+ */
+export function parseResume(text: string): Promise<ParseResponse> {
+  return api<ParseResponse>('/api/v1/draft/parse', { method: 'POST', body: { text } })
+}
+
 /** 读简历底稿。没有就是没有——服务端返回 404，不是空对象。 */
 export function fetchDraft(signal?: AbortSignal): Promise<DraftResponse> {
   return api<DraftResponse>('/api/v1/draft', { signal })

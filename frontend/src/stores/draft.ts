@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
 import { collectDraftIds, createIdSeed, resumeIdSeed, type IdSeed } from '@xiaoyi/shared/domain/ids'
-import { FAILURE_STATES, type ActiveState } from '@xiaoyi/shared/domain/states'
+import { FAILURE_STATES, ALL_STATES, type ActiveState } from '@xiaoyi/shared/domain/states'
 import type {
   Bullet,
   Diagnosis,
@@ -14,13 +14,12 @@ import type {
   DraftProfile,
 } from '@xiaoyi/shared/domain/types'
 import { ApiError } from '@/api/client'
-import { fetchDraft, importLocalDraft, saveDraft } from '@/api/resume'
+import { fetchDraft, importLocalDraft, parseResume, saveDraft } from '@/api/resume'
 import { engineContext, useEngines } from './engines'
 import { orderByDocument } from '@xiaoyi/shared/engines/anchor'
 import { findStructureFindings, type StructureFinding } from '@xiaoyi/shared/engines/structure'
 import { draftKey, persistence } from './persistence'
 import { useSessionStore } from './session'
-import type { ParseResult } from '@xiaoyi/shared/engines/types'
 
 /**
  * 深拷贝草稿。Vue 的响应式代理不能被 structuredClone 克隆，
@@ -41,6 +40,22 @@ export interface SaveOutcome {
   /** 没存成时的状态：文案与用户能做的下一步都在状态表里。 */
   failure?: ActiveState
 }
+
+/**
+ * 解析的结果。
+ *
+ * 成功时给解析出来的那份；失败时给状态——文案与下一步都在状态表里，
+ * 界面直接用，不用自己编。
+ */
+export type IngestOutcome =
+  | {
+      ok: true
+      draft: Draft
+      confidence: number
+      warnings: string[]
+      otherHeaders: string[]
+    }
+  | { ok: false; failure: ActiveState }
 
 export const useDraftStore = defineStore('draft', () => {
   const draft = ref<Draft | null>(null)
@@ -239,11 +254,36 @@ export const useDraftStore = defineStore('draft', () => {
     seed = createIdSeed()
   }
 
-  function ingest(rawText: string): ParseResult {
-    const engines = useEngines()
-    const result = engines.parseDraft(rawText, engineContext(), seed)
-    pending.value = result.ok ? result.draft : null
-    return result
+  /**
+   * 解析简历正文，结果摆在「待保存」那一份里。
+   *
+   * **解析在服务端做**（契约 §4.2）：正文发给 `POST /api/v1/draft/parse`，
+   * 服务端用同一份引擎源码算好再返回。纯计算不落库——用户点保存时才 PUT
+   * 上去，服务端在保存时重跑结构检查做权威校验。
+   */
+  async function ingest(rawText: string): Promise<IngestOutcome> {
+    try {
+      const result = await parseResume(rawText)
+      pending.value = result.draft
+      // 服务端给的 id 是它那套种子续出来的——本机新增的条目要接着它续，
+      // 否则会跟服务端已经用过的 id 撞号。
+      seed = resumeIdSeed(collectDraftIds(result.draft))
+      return {
+        ok: true,
+        draft: result.draft,
+        confidence: result.confidence,
+        warnings: result.warnings,
+        otherHeaders: result.otherHeaders,
+      }
+    } catch (error) {
+      // 失败时状态从错误码取：空正文、认不出结构、连不上服务端，各有自己的说法
+      pending.value = null
+      if (error instanceof ApiError && error.offline) {
+        // 解析的下一步是「等它恢复后再解析一次」，不是「等连上再保存」
+        return { ok: false, failure: { state: ALL_STATES['parse-unreachable']! } }
+      }
+      return { ok: false, failure: failureOf(error) }
+    }
   }
 
   /** 把解析结果存为简历（导入页用）。 */

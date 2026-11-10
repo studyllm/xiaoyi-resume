@@ -16,7 +16,29 @@ vi.mock('@/api/resume', async () => {
   const { ALL_STATES } = await vi.importActual<
     typeof import('@xiaoyi/shared/domain/states')
   >('@xiaoyi/shared/domain/states')
+  const { parseDraft } = await vi.importActual<
+    typeof import('@xiaoyi/shared/engines/parseDraft')
+  >('@xiaoyi/shared/engines/parseDraft')
+  const { createIdSeed } = await vi.importActual<
+    typeof import('@xiaoyi/shared/domain/ids')
+  >('@xiaoyi/shared/domain/ids')
   return {
+    // 解析走服务端：mock 里用同一份引擎源码算，语义与服务端一致
+    parseResume: vi.fn(async (text: string) => {
+      if (!text.trim()) throw new ApiError('RESUME_EMPTY', ALL_STATES['parse-empty']!)
+      const result = parseDraft(
+        text,
+        { now: '2026-01-01T00:00:00.000Z', engineVersion: 'test' },
+        createIdSeed(),
+      )
+      if (!result.ok) throw new ApiError('PARSE_FAILED', ALL_STATES['parse-failed']!)
+      return {
+        draft: result.draft,
+        confidence: result.confidence,
+        warnings: result.warnings,
+        otherHeaders: result.otherHeaders,
+      }
+    }),
     fetchDraft: vi.fn(async () => {
       throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true)
     }),
@@ -137,7 +159,7 @@ describe('落地页', () => {
       const session = useSessionStore()
       session.user = { id: 'user-李四', email: '李四@example.com' }; session.status = 'user'
       const draftStore = useDraftStore()
-      draftStore.ingest('工作经历\n美团 前端工程师 2021.03 - 至今\n· 负责活动页开发')
+      await draftStore.ingest('工作经历\n美团 前端工程师 2021.03 - 至今\n· 负责活动页开发')
       await draftStore.savePending()
     })
     expect(buttonByText(wrapper, '打开我的简历')).toBeTruthy()
@@ -148,7 +170,7 @@ describe('落地页', () => {
       const session = useSessionStore()
       session.user = { id: 'user-李四', email: '李四@example.com' }; session.status = 'user'
       const draftStore = useDraftStore()
-      draftStore.ingest('工作经历\n美团 前端工程师 2021.03 - 至今\n· 负责活动页开发')
+      await draftStore.ingest('工作经历\n美团 前端工程师 2021.03 - 至今\n· 负责活动页开发')
       await draftStore.savePending()
       { session.user = null; session.status = 'guest' }
       await draftStore.restore()

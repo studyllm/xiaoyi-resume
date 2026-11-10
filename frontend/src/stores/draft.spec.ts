@@ -13,6 +13,12 @@ vi.mock('@/api/resume', async () => {
   const { ALL_STATES } = await vi.importActual<
     typeof import('@xiaoyi/shared/domain/states')
   >('@xiaoyi/shared/domain/states')
+  const { parseDraft } = await vi.importActual<
+    typeof import('@xiaoyi/shared/engines/parseDraft')
+  >('@xiaoyi/shared/engines/parseDraft')
+  const { createIdSeed } = await vi.importActual<
+    typeof import('@xiaoyi/shared/domain/ids')
+  >('@xiaoyi/shared/domain/ids')
   return {
     fetchDraft: vi.fn(async () => {
       throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true)
@@ -21,6 +27,22 @@ vi.mock('@/api/resume', async () => {
       revision: revision + 1,
       savedAt: '2026-01-01T00:00:00.000Z',
     })),
+    // 解析走服务端：mock 里用同一份引擎源码算，语义与服务端一致
+    parseResume: vi.fn(async (text: string) => {
+      if (!text.trim()) throw new ApiError('RESUME_EMPTY', ALL_STATES['parse-empty']!)
+      const result = parseDraft(
+        text,
+        { now: '2026-01-01T00:00:00.000Z', engineVersion: 'test' },
+        createIdSeed(),
+      )
+      if (!result.ok) throw new ApiError('PARSE_FAILED', ALL_STATES['parse-failed']!)
+      return {
+        draft: result.draft,
+        confidence: result.confidence,
+        warnings: result.warnings,
+        otherHeaders: result.otherHeaders,
+      }
+    }),
     fetchVersions: vi.fn(async () => ({ items: [], total: 0 })),
     fetchVersion: vi.fn(),
     createVersion: vi.fn(async () => ({
@@ -95,22 +117,47 @@ describe('useDraftStore', () => {
 
   it('parses pasted text into a staged draft', async () => {
     const store = useDraftStore()
-    const result = store.ingest(RESUME)
+    const result = await store.ingest(RESUME)
     expect(result.ok).toBe(true)
     expect(store.pending).not.toBeNull()
     expect(store.hasDraft).toBe(false)
   })
 
+  it('parses on the server, not in the browser', async () => {
+    const store = useDraftStore()
+    await store.ingest(RESUME)
+
+    // 解析在服务端做（契约 §4.2）——客户端不自己算
+    const { parseResume } = await import('@/api/resume')
+    expect(parseResume).toHaveBeenCalledWith(RESUME)
+  })
+
   it('rejects empty text', async () => {
     const store = useDraftStore()
-    const result = store.ingest('   ')
+    const result = await store.ingest('   ')
     expect(result.ok).toBe(false)
-    expect(result.failure?.reason).toBe('empty')
+    expect(result.ok === false && result.failure.state.title).toContain('没有可解析的内容')
+  })
+
+  it('says the server is unreachable when it cannot be reached', async () => {
+    const { parseResume } = await import('@/api/resume')
+    const { ApiError } = await import('@/api/client')
+    const { ALL_STATES } = await import('@xiaoyi/shared/domain/states')
+    vi.mocked(parseResume).mockRejectedValueOnce(
+      new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true),
+    )
+
+    const store = useDraftStore()
+    const result = await store.ingest(RESUME)
+
+    expect(result.ok).toBe(false)
+    // 下一步是「等它恢复后再解析一次」，不是「等连上再保存」
+    expect(result.ok === false && result.failure.state.hint).toContain('再点一次')
   })
 
   it('saves the staged draft', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     const outcome = await store.savePending()
     expect(outcome.ok).toBe(true)
     expect(store.hasDraft).toBe(true)
@@ -119,9 +166,9 @@ describe('useDraftStore', () => {
 
   it('refuses to overwrite an existing draft without a confirmation', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     const outcome = await store.savePending()
     expect(outcome.ok).toBe(false)
     expect(outcome.failure?.state.title).toContain('覆盖')
@@ -129,16 +176,16 @@ describe('useDraftStore', () => {
 
   it('overwrites an existing draft once the overwrite is confirmed', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     const outcome = await store.savePending({ confirmed: true })
     expect(outcome.ok).toBe(true)
   })
 
   it('does not increment the revision while the change is unsaved', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     const before = store.draft!.revision
     store.addBullet(sectionIdOf(store.draft!, 'experience'), itemIdOf(store.draft!, 'experience'))
@@ -148,7 +195,7 @@ describe('useDraftStore', () => {
 
   it('increments the revision once when the changes are saved', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     const before = store.draft!.revision
 
@@ -163,7 +210,7 @@ describe('useDraftStore', () => {
 
   it('restores the last saved content when the changes are discarded', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     const sectionId = sectionIdOf(store.draft!, 'experience')
     const itemId = itemIdOf(store.draft!, 'experience')
@@ -186,7 +233,7 @@ describe('useDraftStore', () => {
 
   it('saves automatically when there are unsaved changes', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     const before = store.draft!.revision
 
@@ -198,7 +245,7 @@ describe('useDraftStore', () => {
 
   it('keeps the identifier of a bullet when its text changes', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     const bulletId = store.draft!.sections
       .find((section) => section.kind === 'experience')!
@@ -218,7 +265,7 @@ describe('useDraftStore', () => {
 
   it('gives a new bullet a fresh identifier', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     const before = store.draft!.sections
       .find((section) => section.kind === 'experience')!
@@ -233,7 +280,7 @@ describe('useDraftStore', () => {
 
   it('removes a bullet', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     const bulletId = store.draft!.sections
       .find((section) => section.kind === 'experience')!
@@ -247,7 +294,7 @@ describe('useDraftStore', () => {
 
   it('adds and removes an entry', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     store.addItem(sectionIdOf(store.draft!, 'project'))
     const items = store.draft!.sections.find((section) => section.kind === 'project')!.items
@@ -258,7 +305,7 @@ describe('useDraftStore', () => {
 
   it('drops the comments of a removed bullet', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     store.diagnose()
     const bulletIssue = store.diagnosis!.issues.find((issue) => issue.bulletId)
@@ -274,7 +321,7 @@ describe('useDraftStore', () => {
 
   it('drops the comments of a removed entry', async () => {
     const store = useDraftStore()
-    store.ingest('工作经历\n美团 前端工程师\n· 负责活动页面的前端开发\n')
+    await store.ingest('工作经历\n美团 前端工程师\n· 负责活动页面的前端开发\n')
     await store.savePending()
     store.diagnose()
     const itemIssue = store.diagnosis!.issues.find((issue) => issue.itemId && !issue.bulletId)
@@ -286,7 +333,7 @@ describe('useDraftStore', () => {
 
   it('keeps the comments that are still anchored to the content', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     store.diagnose()
     expect(store.liveIssues.length).toBe(store.diagnosis!.issues.length)
@@ -294,7 +341,7 @@ describe('useDraftStore', () => {
 
   it('orders the comments by where they sit in the resume, not by severity', async () => {
     const store = useDraftStore()
-    store.ingest(
+    await store.ingest(
       '工作经历\n甲公司 前端工程师 2021.03 - 2023.01\n· 参与团队协作与日常维护\n乙公司 高级工程师 2023.02 - 至今\n· 负责后端服务开发\n',
     )
     await store.savePending()
@@ -315,7 +362,7 @@ describe('useDraftStore', () => {
 
   it('stores the months of an entry in a single format', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     store.updateItemMeta(sectionIdOf(store.draft!, 'experience'), itemIdOf(store.draft!, 'experience'), {
       start: '2021-03',
@@ -330,7 +377,7 @@ describe('useDraftStore', () => {
 
   it('marks the diagnosis as stale once the draft changes', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     store.diagnose()
     expect(store.diagnosisStale).toBe(false)
@@ -340,7 +387,7 @@ describe('useDraftStore', () => {
 
   it('keeps the diagnosis attached to the revision it was made on', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     const diagnosis = store.diagnose()
     store.addBullet(sectionIdOf(store.draft!, 'experience'), itemIdOf(store.draft!, 'experience'))
@@ -349,7 +396,7 @@ describe('useDraftStore', () => {
 
   it('does not report a stale diagnosis as fresh', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     store.diagnose()
     store.addBullet(sectionIdOf(store.draft!, 'experience'), itemIdOf(store.draft!, 'experience'))
@@ -359,7 +406,7 @@ describe('useDraftStore', () => {
   it('refuses to save while logged out', async () => {
     { const s = useSessionStore(); s.user = null; s.status = 'guest' }
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     const outcome = await store.savePending()
     expect(outcome.ok).toBe(false)
     expect(outcome.failure?.state.title).toContain('登录')
@@ -368,7 +415,7 @@ describe('useDraftStore', () => {
 
   it('keeps the profile that was parsed from the resume header', async () => {
     const store = useDraftStore()
-    store.ingest('张三\n前端工程师 · 6 年经验\n手机：138-0000-0000\n\n工作经历\n美团 前端工程师 2021.03 - 至今\n· 负责活动页开发')
+    await store.ingest('张三\n前端工程师 · 6 年经验\n手机：138-0000-0000\n\n工作经历\n美团 前端工程师 2021.03 - 至今\n· 负责活动页开发')
     await store.savePending()
     expect(store.draft!.profile.name).toBe('张三')
     expect(store.draft!.profile.headline).toBe('前端工程师 · 6 年经验')
@@ -377,7 +424,7 @@ describe('useDraftStore', () => {
 
   it('saves an edited profile', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
 
     store.updateProfile({ name: '李四', headline: '后端工程师' })
@@ -388,7 +435,7 @@ describe('useDraftStore', () => {
 
   it('adds and removes a contact', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
 
     store.addContact({ label: '邮箱', value: 'a@example.com' })
@@ -400,7 +447,7 @@ describe('useDraftStore', () => {
 
   it('does not let the user edit the staged result through the saved draft', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     const pending = store.pending!
     const section = pending.sections.find((entry) => entry.kind === 'experience')!
     const item = section.items[0]!
@@ -431,7 +478,7 @@ describe('useDraftStore', () => {
 
   it('清空诊断结果会带走依附于它的已改标记', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     store.diagnose()
 
@@ -452,7 +499,7 @@ describe('useDraftStore', () => {
 
   it('说得出诊断走到了哪一步', async () => {
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
     expect(store.diagnosisState).toBe('none')
 
@@ -465,7 +512,7 @@ describe('useDraftStore', () => {
 
   it('诊断查不出问题时是空状态而不是有意见', async () => {
     const store = useDraftStore()
-    store.ingest(CLEAN_RESUME)
+    await store.ingest(CLEAN_RESUME)
     await store.savePending()
     store.diagnose()
 
@@ -483,7 +530,7 @@ describe('简历按人分槽', () => {
     const session = useSessionStore()
     session.user = { id: `user-${name}`, email: `${name}@example.com` }; session.status = 'user'
     const store = useDraftStore()
-    store.ingest(RESUME)
+    await store.ingest(RESUME)
     await store.savePending()
   }
 
