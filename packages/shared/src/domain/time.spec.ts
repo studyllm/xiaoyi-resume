@@ -142,11 +142,22 @@ describe('rangesOverlap', () => {
     ).toBe(true)
   })
 
-  it('treats touching endpoints as overlapping', () => {
+  it('does not treat a handover month as overlapping', () => {
+    // 简历里相邻两段经历首尾相接是常态：这一段结束在 2022-01，下一段就从
+    // 2022-01 开始。那是交接，不是同时干两份。
     expect(
       rangesOverlap(
         { start: '2021-01', end: '2022-01', present: false },
         { start: '2022-01', end: '2023-01', present: false },
+      ),
+    ).toBe(false)
+  })
+
+  it('treats two shared months as overlapping', () => {
+    expect(
+      rangesOverlap(
+        { start: '2021-01', end: '2022-01', present: false },
+        { start: '2021-12', end: '2023-01', present: false },
       ),
     ).toBe(true)
   })

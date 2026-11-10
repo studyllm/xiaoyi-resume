@@ -59,6 +59,19 @@ describe('findStructureFindings', () => {
     expect(rules).toContain('missing-start')
   })
 
+  it('labels an entry with no org and no title by its first bullet', () => {
+    // 「未命名的条目」对用户毫无用处——他既认不出那是哪一段，也就没法判断是
+    // 自己漏写了还是解析没认出来。用第一条要点的开头，至少能对上。
+    const findings = findStructureFindings(
+      makeDraft({
+        experience: [{ id: 'item-1', bullets: ['参与江苏银行、网商银行的监管报送系统研发'] }],
+      }),
+    )
+    const missingOrg = findings.find((finding) => finding.ruleId === 'missing-org')!
+    expect(missingOrg.itemLabel).toBe('参与江苏银行、网商银行的监管报送系统研发')
+    expect(missingOrg.quote).not.toContain('未命名')
+  })
+
   it('names the fields the section actually uses', () => {
     const findings = findStructureFindings(
       makeDraft({ education: [{ id: 'item-1', start: '2014-09', bullets: ['主修课程'] }] }),

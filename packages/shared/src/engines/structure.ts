@@ -1,4 +1,4 @@
-import type { Draft, SectionKind, Severity } from '../domain/types'
+import type { Draft, DraftItem, SectionKind, Severity } from '../domain/types'
 import { hasItemHead, SECTION_ORDER } from '../domain/types'
 import { SECTION_FIELD_WORDS } from '../domain/sectionFields'
 import { compareYearMonth, rangesOverlap } from '../domain/time'
@@ -113,6 +113,20 @@ export function itemLabel(org?: string, title?: string): string {
   return org ?? title ?? ''
 }
 
+/**
+ * 条目标签：机构与职位都没有时，用第一条要点开头。
+ *
+ * 「未命名的条目」对用户毫无用处——他既认不出那是哪一段，也就没法判断是
+ * 自己漏写了还是解析没认出来。给出要点开头，至少能对上。
+ */
+function labelWithFallback(item: DraftItem): string {
+  const label = itemLabel(item.org, item.title)
+  if (label) return label
+  const first = item.bullets[0]?.text.trim() ?? ''
+  if (!first) return ''
+  return first.length > 24 ? `${first.slice(0, 24)}…` : first
+}
+
 /** 意见 id 的统一写法，纸面标注用它去找右侧对应的意见。 */
 export function structureIssueId(ruleId: string, anchor: string): string {
   return `${ruleId}@${anchor}`
@@ -148,7 +162,7 @@ export function findStructureFindings(draft: Draft): StructureFinding[] {
     }
 
     section.items.forEach((item, itemIndex) => {
-      const label = itemLabel(item.org, item.title)
+      const label = labelWithFallback(item)
 
       if (hasItemHead(kind)) {
         if (!item.org) {

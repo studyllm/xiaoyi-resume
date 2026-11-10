@@ -152,7 +152,10 @@ export function rangesOverlap(a: DateRange, b: DateRange): boolean {
   const aEnd = a.present ? OPEN_END : a.end
   const bEnd = b.present ? OPEN_END : b.end
   if (!aEnd || !bEnd) return false
-  return compareYearMonth(a.start, bEnd) <= 0 && compareYearMonth(b.start, aEnd) <= 0
+  // 严格小于：**共用一个月不算重叠**。简历里相邻两段经历首尾相接是常态
+  // （这一段结束在 2020-09，下一段就从 2020-09 开始），那是交接，不是同时干两份。
+  // 共用两个月以上才是真重叠。
+  return compareYearMonth(a.start, bEnd) < 0 && compareYearMonth(b.start, aEnd) < 0
 }
 
 export interface DateSpan {
