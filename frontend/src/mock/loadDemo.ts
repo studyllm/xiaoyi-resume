@@ -21,7 +21,7 @@ export async function loadDemoData(): Promise<DemoDataResult> {
   await session.loginAsDemo()
 
   const draftStore = useDraftStore()
-  draftStore.ingest(SAMPLE_DRAFT_TEXT)
+  await draftStore.ingest(SAMPLE_DRAFT_TEXT)
   const outcome = await draftStore.savePending({ confirmed: true })
 
   useUiStore().setDemoJd(SAMPLE_JD_FRONTEND)

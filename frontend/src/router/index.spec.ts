@@ -14,7 +14,29 @@ vi.mock('@/api/resume', async () => {
   const { ALL_STATES } = await vi.importActual<
     typeof import('@xiaoyi/shared/domain/states')
   >('@xiaoyi/shared/domain/states')
+  const { parseDraft } = await vi.importActual<
+    typeof import('@xiaoyi/shared/engines/parseDraft')
+  >('@xiaoyi/shared/engines/parseDraft')
+  const { createIdSeed } = await vi.importActual<
+    typeof import('@xiaoyi/shared/domain/ids')
+  >('@xiaoyi/shared/domain/ids')
   return {
+    // 解析走服务端：mock 里用同一份引擎源码算，语义与服务端一致
+    parseResume: vi.fn(async (text: string) => {
+      if (!text.trim()) throw new ApiError('RESUME_EMPTY', ALL_STATES['parse-empty']!)
+      const result = parseDraft(
+        text,
+        { now: '2026-01-01T00:00:00.000Z', engineVersion: 'test' },
+        createIdSeed(),
+      )
+      if (!result.ok) throw new ApiError('PARSE_FAILED', ALL_STATES['parse-failed']!)
+      return {
+        draft: result.draft,
+        confidence: result.confidence,
+        warnings: result.warnings,
+        otherHeaders: result.otherHeaders,
+      }
+    }),
     fetchDraft: vi.fn(async () => {
       throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true)
     }),
@@ -60,7 +82,7 @@ async function flushGuard(): Promise<void> {
 
 async function setupDirtyDraft(): Promise<ReturnType<typeof useDraftStore>> {
   const draftStore = useDraftStore()
-  draftStore.ingest(RESUME)
+  await draftStore.ingest(RESUME)
   await draftStore.savePending()
   draftStore.updateProfile({ name: '临时改动' })
   return draftStore

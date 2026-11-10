@@ -79,7 +79,7 @@ function anchorOf(finding: StructureFinding): string {
 }
 
 /** 返回解析是否成功——上传路径要靠它决定要不要把用户带回粘贴页签。 */
-function parse(extraWarnings: string[] = []): boolean {
+async function parse(extraWarnings: string[] = []): Promise<boolean> {
   failure.value = null
   if (!rawText.value.trim()) {
     reportFailure(FAILURE_STATES['parse-empty'])
@@ -87,7 +87,7 @@ function parse(extraWarnings: string[] = []): boolean {
   }
 
   parsing.value = true
-  const result = draftStore.ingest(rawText.value)
+  const result = await draftStore.ingest(rawText.value)
   parsing.value = false
 
   if (!result.ok) {
@@ -96,7 +96,7 @@ function parse(extraWarnings: string[] = []): boolean {
     warnings.value = [...extraWarnings]
     structureIssues.value = []
     otherHeaders.value = []
-    reportFailure(result.failure?.state ?? FAILURE_STATES['parse-failed'])
+    reportFailure(result.failure.state)
     return false
   }
 
@@ -140,7 +140,7 @@ async function onFileSelected(uploadFile: { raw?: File }): Promise<void> {
 
     // 提取出的文字先进输入框：用户能看到读到了什么，也能自己补
     rawText.value = result.text
-    const parsed = parse(result.warnings)
+    const parsed = await parse(result.warnings)
     if (!parsed && result.quality === 'sparse') {
       // 结构认不出来，但读到的文字已经交到用户手上了——带回粘贴页签让他改
       tab.value = 'paste'
@@ -210,9 +210,9 @@ async function doSave(): Promise<void> {
   router.push('/draft')
 }
 
-function loadDemo(): void {
+async function loadDemo(): Promise<void> {
   rawText.value = SAMPLE_DRAFT_TEXT
-  parse()
+  await parse()
   uiStore.setDemoJd(SAMPLE_JDS[0]?.text ?? null)
 }
 </script>

@@ -30,6 +30,12 @@ vi.mock('@/api/resume', async () => {
   const { ALL_STATES } = await vi.importActual<
     typeof import('@xiaoyi/shared/domain/states')
   >('@xiaoyi/shared/domain/states')
+  const { parseDraft } = await vi.importActual<
+    typeof import('@xiaoyi/shared/engines/parseDraft')
+  >('@xiaoyi/shared/engines/parseDraft')
+  const { createIdSeed } = await vi.importActual<
+    typeof import('@xiaoyi/shared/domain/ids')
+  >('@xiaoyi/shared/domain/ids')
   return {
     fetchDraft: vi.fn(async () => {
       throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true)
@@ -38,6 +44,22 @@ vi.mock('@/api/resume', async () => {
       revision: revision + 1,
       savedAt: '2026-01-01T00:00:00.000Z',
     })),
+    // 解析走服务端：mock 里用同一份引擎源码算，语义与服务端一致
+    parseResume: vi.fn(async (text: string) => {
+      if (!text.trim()) throw new ApiError('RESUME_EMPTY', ALL_STATES['parse-empty']!)
+      const result = parseDraft(
+        text,
+        { now: '2026-01-01T00:00:00.000Z', engineVersion: 'test' },
+        createIdSeed(),
+      )
+      if (!result.ok) throw new ApiError('PARSE_FAILED', ALL_STATES['parse-failed']!)
+      return {
+        draft: result.draft,
+        confidence: result.confidence,
+        warnings: result.warnings,
+        otherHeaders: result.otherHeaders,
+      }
+    }),
     fetchVersions: vi.fn(async () => ({ items: [...createdVersions], total: createdVersions.length })),
     deleteVersion: vi.fn(async (id: string) => {
       const index = createdVersions.findIndex((item) => item.id === id)
@@ -267,7 +289,7 @@ async function seedDraft(): Promise<void> {
   const session = useSessionStore()
   session.user = { id: 'user-张三', email: '张三@example.com' }; session.status = 'user'
   const draftStore = useDraftStore()
-  draftStore.ingest(SAMPLE_DRAFT_TEXT)
+  await draftStore.ingest(SAMPLE_DRAFT_TEXT)
   await draftStore.savePending()
 }
 
@@ -288,7 +310,7 @@ describe('完整流程回归', () => {
     expect(session.isLoggedIn).toBe(true)
 
     const draftStore = useDraftStore()
-    const parsed = draftStore.ingest(SAMPLE_DRAFT_TEXT)
+    const parsed = await draftStore.ingest(SAMPLE_DRAFT_TEXT)
     expect(parsed.ok).toBe(true)
     expect((await draftStore.savePending()).ok).toBe(true)
 

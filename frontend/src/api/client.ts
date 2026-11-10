@@ -93,7 +93,13 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     code = body?.error?.code ?? 'UNKNOWN'
     field = body?.error?.field
   } catch {
-    // 响应体不是 JSON——按未知错误处理
+    // 响应体不是 JSON。我们的服务端永远回 JSON（契约 §2.2），所以 5xx 配一段
+    // 不是 JSON 的正文，说明请求没到我们的服务端——中间那层（开发代理、网关）
+    // 回的字。当成「连不上」，不是「出了点问题」。
+    if (response.status >= 500) {
+      throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, requestId, true)
+    }
+    // 其余情况按未知错误处理
   }
 
   const { state } = stateForCode(code)
