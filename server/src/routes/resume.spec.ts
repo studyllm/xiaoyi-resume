@@ -287,6 +287,37 @@ describe('生成版本', () => {
     expect(await h.store.listVersions(user!.id)).toHaveLength(1)
   })
 
+  it('生成两次得到两个不同的 id', async () => {
+    // 版本 id 是 versions 表的全局主键。每个请求新建一个种子的话，两个版本
+    // 都叫 version-1——第二个插入直接撞主键（500）。
+    const h = harness()
+    const cookie = await withDraft(h)
+
+    const first = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/versions',
+      cookies: { session: cookie },
+      headers: { 'idempotency-key': 'a' },
+      payload: { jdText: JD },
+    })
+    const second = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/versions',
+      cookies: { session: cookie },
+      headers: { 'idempotency-key': 'b' },
+      payload: { jdText: JD },
+    })
+
+    expect(first.statusCode).toBe(201)
+    expect(second.statusCode).toBe(201)
+    expect(second.json().version.id).not.toBe(first.json().version.id)
+
+    const user = await h.store.findUserByEmail('someone@example.com')
+    const versions = await h.store.listVersions(user!.id)
+    expect(versions).toHaveLength(2)
+    expect(new Set(versions.map((item) => item.id)).size).toBe(2)
+  })
+
   it('同一个幂等键不会生成两份', async () => {
     const h = harness()
     const cookie = await withDraft(h)

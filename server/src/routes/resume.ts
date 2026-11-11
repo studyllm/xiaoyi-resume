@@ -20,6 +20,17 @@ const DEFAULT_PAGE_SIZE = 20
  * **一律要求登录**：数据按账号隔离，这是后端保证的（验收项 A3.2），
  * 不是靠前端藏起来。
  */
+/**
+ * 版本 id 的种子。
+ *
+ * **进程级，不每个请求新建。** 版本 id 是 `versions` 表的全局主键：每个请求
+ * 新建一个种子的话，每个版本都叫 `version-1`——库里只要有一个版本，之后每次
+ * 生成都撞主键，插入直接失败（500）。
+ *
+ * 起始计数是进程启动时间：跨进程也不撞；同一进程内计数器一直递增。
+ */
+const versionIdSeed = createIdSeed(Date.now())
+
 export function registerResumeRoutes(
   app: FastifyInstance,
   deps: { store: Store; idempotency: IdempotencyStore; generator: ResumeGenerator },
@@ -111,7 +122,7 @@ export function registerResumeRoutes(
         dropIrrelevantProjects: body.options?.dropIrrelevantProjects ?? true,
         useLlm: body.options?.useLlm === true,
       },
-      createIdSeed(),
+      versionIdSeed,
     )
 
     const version = { ...result.version, userId: user.id }
