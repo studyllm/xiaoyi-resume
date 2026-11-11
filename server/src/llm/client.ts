@@ -73,7 +73,13 @@ async function call(
   })
 
   if (!response.ok) {
-    const error = new Error(`模型返回 ${response.status}`) as Error & { status?: number }
+    // **把服务商说的带上。** 只留状态码是不够的：402 与 401 都是「没调通」，
+    // 但一个是余额不足、一个是密钥不对——只有服务商自己说得清。
+    // 截断：正文可能很长，日志与生成日志里都不需要全文。
+    const detail = await errorDetail(response)
+    const error = new Error(
+      `模型返回 ${response.status}${detail ? `：${detail}` : ''}`,
+    ) as Error & { status?: number }
     error.status = response.status
     throw error
   }
@@ -91,8 +97,31 @@ async function call(
   }
 }
 
-/** 网络错误与 5xx 才值得再试一次。 */
-function isWorthRetrying(error: unknown): boolean {
+/**
+ * 服务商的错误说明。
+ *
+ * 优先取正文里的 `error.message`（OpenAI 兼容的形状：`{"error":{"message":"…"}}`），
+ * 拿不到就退回正文本身。截到 300 字——正文可能很长，日志里不需要全文。
+ */
+async function errorDetail(response: Response): Promise<string> {
+  let body: string
+  try {
+    body = await response.text()
+  } catch {
+    return ''
+  }
+  if (!body.trim()) return ''
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: unknown }; message?: unknown }
+    const message = parsed.error?.message ?? parsed.message
+    if (typeof message === 'string' && message.trim()) return message.trim().slice(0, 300)
+  } catch {
+    // 不是 JSON——退回正文
+  }
+  return body.trim().slice(0, 300)
+}
+
+/** 网络错误与 5xx 才值得再试一次。 */function isWorthRetrying(error: unknown): boolean {
   if (!(error instanceof Error)) return false
   const status = (error as Error & { status?: number }).status
   if (status === undefined) return true

@@ -91,6 +91,28 @@ describe('OpenAI 兼容客户端', () => {
     expect(attempts).toBe(1)
   })
 
+  it('报错时带上服务商自己说的原因', async () => {
+    // 只留状态码是不够的：402 与 401 都是「没调通」，但一个是余额不足、
+    // 一个是密钥不对——只有服务商自己说得清。
+    const chat = createOpenAiChat(CONFIG, {
+      fetchImpl: async () =>
+        jsonResponse(
+          { error: { type: 'insufficient_balance_error', message: 'insufficient balance (1008)' } },
+          402,
+        ),
+    })
+
+    await expect(chat(REQUEST)).rejects.toThrow(/402.*insufficient balance/)
+  })
+
+  it('服务商没有给结构化正文时也把正文带上', async () => {
+    const chat = createOpenAiChat(CONFIG, {
+      fetchImpl: async () => new Response('upstream exploded', { status: 500 }),
+    })
+
+    await expect(chat(REQUEST)).rejects.toThrow(/500.*upstream exploded/)
+  })
+
   it('模型返回空内容时报错', async () => {
     const chat = createOpenAiChat(CONFIG, {
       fetchImpl: async () => jsonResponse({ choices: [{ message: { content: '' } }] }),
