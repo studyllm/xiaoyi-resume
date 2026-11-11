@@ -384,3 +384,50 @@ describe('parseDraft 的条目排序', () => {
     expect(items[0]!.start).toBe('2019-03')
   })
 })
+
+describe('parseDraft 的条目头切分', () => {
+  it('机构名靠形态词认——职位并列不会被当成机构名', () => {
+    // 「项目经理 / Java高级开发 | 南京XXX信息科技有限公司」：按分隔符切只能切出
+    // 「项目经理」当机构名，真实的机构名在最后。
+    const result = parseDraft(
+      '工作经历\n项目经理 / Java高级开发 | 南京XXX信息科技有限公司 | 2021.03 - 至今\n· 负责架构设计与技术选型\n',
+      CTX,
+      createIdSeed(),
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const item = sectionOf(result.draft!, 'experience').items[0]!
+    expect(item.org).toBe('南京XXX信息科技有限公司')
+    expect(item.title).toBe('项目经理 Java高级开发')
+  })
+
+  it('条目头被 PDF 切成两半时，后半行的日期补成上一条的结束日期', () => {
+    const result = parseDraft(
+      '工作经历\nJava开发工程师 | 南京XX数据系统股份有限公司 | 2013/03 –\n2017/09\n· 参与金融监管报送系统研发\n',
+      CTX,
+      createIdSeed(),
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const items = sectionOf(result.draft!, 'experience').items
+    expect(items).toHaveLength(1)
+    expect(items[0]!.start).toBe('2013-03')
+    expect(items[0]!.end).toBe('2017-09')
+  })
+
+  it('补上的日期比开始还早时不合并——那是表格里下一行自己的日期', () => {
+    const result = parseDraft(
+      '项目经历\n统 2018-10\n2016-01\n',
+      CTX,
+      createIdSeed(),
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const items = sectionOf(result.draft!, 'project').items
+    expect(items).toHaveLength(2)
+    expect(items[0]!.end).toBeNull()
+  })
+})

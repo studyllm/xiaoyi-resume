@@ -152,6 +152,18 @@ function headerKindOf(line: string): SectionKind | null {
   return kindOfHeaderText(part)
 }
 
+/**
+ * 机构形态词。
+ *
+ * 出现这些词的片段是机构名，不是职位。机构名千奇百怪，形态词却很稳定：
+ * 「XX科技有限公司」「XX信息技术股份有限公司」「XX理工大学」。
+ *
+ * 靠它把机构名从职位里挑出来——条目头常写成「项目经理 / Java高级开发 |
+ * 南京XXX信息科技有限公司」，按分隔符切只能切出「项目经理」当机构名。
+ */
+const ORG_PATTERN =
+  /有限|集团|科技|信息|股份|实业|网络|软件|数据|研究院|研究所|事业部|中心|公司|银行|保险|证券|医院|大学|学院|学校/
+
 function splitOrgTitle(text: string): { org?: string; title?: string } {
   const trimmed = text.trim()
   if (!trimmed) return {}
@@ -162,6 +174,12 @@ function splitOrgTitle(text: string): { org?: string; title?: string } {
       .split(separator)
       .map((part) => part.trim())
       .filter(Boolean)
+    // 有形态词的那个片段是机构名，其余是职位
+    const orgPart = parts.find((part) => ORG_PATTERN.test(part))
+    if (orgPart) {
+      const rest = parts.filter((part) => part !== orgPart)
+      return { org: orgPart, ...(rest.length ? { title: rest.join(' ') } : {}) }
+    }
     if (parts.length >= 2) return { org: parts[0], title: parts.slice(1).join(' ') }
     if (parts.length === 1) return { org: parts[0] }
   }
@@ -274,6 +292,31 @@ function parseStructured(
     const span = findDateSpan(line)
     if (span) {
       const remainder = `${line.slice(0, span.start)} ${line.slice(span.end)}`
+
+      // PDF 的行宽会把条目头切成两半：
+      //   「Java开发工程师 | 南京XX数据系统股份有限公司 | 2013/03 –」
+      //   「2017/09」
+      // 后半行只有日期，没有别的字——那是上一条的**结束日期**，不是新的一条。
+      // 当成新条目会多出一条没名没姓的条目，还会打乱顺序。
+      //
+      // 但表格里的行序不按时间走（那是表格，不是经历）：补上的日期比开始还早时
+      // 不合并——那说明它是下一行自己的日期。
+      const previous = currentItem
+      const previousStart = previous?.start ?? ''
+      const spanStart = span.range.start ?? ''
+      if (
+        !remainder.trim() &&
+        previous &&
+        previousStart &&
+        !previous.end &&
+        !previous.present &&
+        compareYearMonth(spanStart, previousStart) >= 0
+      ) {
+        previous.end = spanStart
+        previous.present = span.range.present
+        continue
+      }
+
       const { org, title } = splitOrgTitle(remainder)
       currentItem = makeItem(seed, {
         org,
