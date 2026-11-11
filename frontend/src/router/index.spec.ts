@@ -152,6 +152,44 @@ describe('路由离开时的未保存提示', () => {
   })
 })
 
+describe('需要底稿的页面', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('草稿还在加载时不误判「没有底稿」', async () => {
+    // 刷新后草稿从服务端读，可能还在路上。守卫不等它到就判「没有底稿」，
+    // 会把刚刷新过页面的用户误送回导入页——草稿明明在服务端。
+    const { fetchDraft } = await import('@/api/resume')
+    // 草稿比会话慢——刷新后先问「我是谁」，再读草稿，两者是两次请求
+    vi.mocked(fetchDraft).mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      return {
+        draft: {
+          id: 'draft-1',
+          userId: 'user-张三',
+          revision: 1,
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          profile: { name: '张三', headline: '', contacts: [] },
+          sections: [],
+        },
+        revision: 1,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }
+    })
+
+    const session = useSessionStore()
+    session.user = { id: 'user-张三', email: 'zhang@example.com' }
+    session.status = 'user'
+
+    const draftStore = useDraftStore()
+    void draftStore.restore() // 草稿在路上
+
+    await router.push('/jd')
+    expect(router.currentRoute.value.path).toBe('/jd')
+  })
+})
+
 describe('未登录时能去哪些页面', () => {
   beforeEach(async () => {
     setActivePinia(createPinia())

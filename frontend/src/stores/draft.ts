@@ -161,6 +161,16 @@ export const useDraftStore = defineStore('draft', () => {
   /** 正在进行的重载。保存前要等它完成——否则带的是旧账号的修订号。 */
   let restoring: Promise<void> | null = null
 
+  /**
+   * 等当前这次重载结束。
+   *
+   * 路由守卫用它：草稿是从服务端读的，刷新后还在路上。守卫不等它到就判
+   * 「没有底稿」，会把刚刷新过页面的用户误送回导入页。
+   */
+  function whenRestored(): Promise<void> {
+    return restoring ?? Promise.resolve()
+  }
+
   async function doRestore(): Promise<void> {
     const session = useSessionStore()
     const userId = session.currentUserId
@@ -548,6 +558,7 @@ export const useDraftStore = defineStore('draft', () => {
     diagnosisState,
     structureFindings,
     restore,
+    whenRestored,
     ingest,
     savePending,
     saveEdits,
