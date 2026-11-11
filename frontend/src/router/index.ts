@@ -116,9 +116,14 @@ router.beforeEach(async (to, from) => {
     return { path: '/', query: { redirect: to.fullPath } }
   }
 
-  if (to.meta.requiresDraft && !draftStore.hasDraft) {
-    ElMessage.warning(stateMessage(FAILURE_STATES['draft-required']))
-    return { path: '/import' }
+  if (to.meta.requiresDraft) {
+    // 草稿是从服务端读的，刷新后还在路上。不等它到就判「没有底稿」，
+    // 会把刚刷新过页面的用户误送回导入页——草稿明明在服务端。
+    await draftStore.whenRestored()
+    if (!draftStore.hasDraft) {
+      ElMessage.warning(stateMessage(FAILURE_STATES['draft-required']))
+      return { path: '/import' }
+    }
   }
 
   return true
