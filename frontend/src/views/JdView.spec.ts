@@ -8,6 +8,7 @@ import { fetchEngineStatus } from '@/api/resume'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
 import { useVersionStore } from '@/stores/versions'
+import type { ResumeVersion } from '@xiaoyi/shared/domain/types'
 import JdView from './JdView.vue'
 
 vi.mock('@/api/resume', () => ({
@@ -99,6 +100,69 @@ describe('模型没调通时要说清原因', () => {
     // 提示里要能看到真正的原因，而不是只说「模型没用上」
     const messages = [...document.querySelectorAll('.el-message')].map((el) => el.textContent ?? '')
     expect(messages.join(' ')).toContain('insufficient balance')
+  })
+})
+
+describe('生成时的等待提示', () => {
+  beforeEach(() => {
+    vi.mocked(fetchEngineStatus).mockReset()
+    vi.mocked(fetchEngineStatus).mockResolvedValue({ available: true })
+  })
+
+  it('等模型的时候说清在等什么、已经等了多久', async () => {
+    const wrapper = await mountJd()
+    const draftStore = useDraftStore()
+    draftStore.draft = {
+      id: 'draft-1',
+      userId: 'user-1',
+      revision: 1,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      profile: { name: '张三', headline: '', contacts: [] },
+      sections: [],
+    }
+    const versionStore = useVersionStore()
+    // 生成一直没结束——用户需要看到「还在等」
+    const pending: { finish?: (version: ResumeVersion) => void } = {}
+    vi.spyOn(versionStore, 'generate').mockImplementation(
+      () => new Promise((resolve) => { pending.finish = resolve }),
+    )
+
+    await wrapper.find('textarea').setValue('高级后端工程师\n\n任职要求：\n1. 熟悉 Java\n')
+    await wrapper.findAll('button').find((b) => b.text().includes('解析 JD'))!.trigger('click')
+    await flushPromises()
+    // 勾上「本次用模型改写」
+    const modelSwitch = wrapper.findAll('.el-switch').find((sw) => sw.text().includes('本次用模型'))
+    await modelSwitch!.trigger('click')
+    await flushPromises()
+
+    await wrapper.findAll('button').find((b) => b.text().includes('生成版本'))!.trigger('click')
+    await flushPromises()
+
+    // 提示说清在等模型，并且有计时
+    expect(wrapper.text()).toContain('正在等模型改写')
+    expect(wrapper.text()).toContain('调不通时会自动改用规则引擎')
+    expect(wrapper.text()).toMatch(/已等待 \d+ 秒/)
+
+    pending.finish?.({
+      id: 'ver-1',
+      userId: 'user-1',
+      name: '版本',
+      profile: { name: '', headline: '', contacts: [] },
+      jdRawText: '',
+      jdRoleName: '',
+      draftRevision: 1,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      body: '',
+      sections: [],
+      diff: [],
+      uncovered: [],
+      coverage: [],
+      integrity: { checked: 0, violations: [], observations: [], generator: 'rules', reverted: 0, degraded: false },
+      engineVersion: 'x',
+    })
+    await flushPromises()
+    // 结束后提示消失
+    expect(wrapper.text()).not.toContain('正在等模型改写')
   })
 })
 
