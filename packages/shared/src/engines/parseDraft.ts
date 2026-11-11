@@ -189,6 +189,29 @@ function splitOrgTitle(text: string): { org?: string; title?: string } {
   return { org: trimmed }
 }
 
+/**
+ * 这一行是不是表格的列标题行。
+ *
+ * 表格的列标题行长这样：「时间 项目名称 核心职责与成果」——不含日期、由三个
+ * 以上空格分隔的短词组成，而且**下一行含日期**（表格的第一列通常就是时间）。
+ *
+ * 最后一条是防误判的关键：普通要点写成「负责 前端 后端」也像表格头，但它的
+ * 下一行多半不含日期。判错的代价很大——整个分区剩下的行都会变成要点，条目
+ * 全部消失。
+ */
+function isTableHeaderLine(line: string, nextLine: string | undefined): boolean {
+  if (findDateSpan(line)) return false
+  // 带项目符号的是要点，不是列标题
+  if (stripBulletMarker(line)) return false
+  const parts = line
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  if (parts.length < 3) return false
+  if (!parts.every((part) => part.length <= 8)) return false
+  return nextLine !== undefined && findDateSpan(nextLine) !== null
+}
+
 function isMeaningfulLine(line: string): boolean {
   const cjkCount = (line.match(/[一-鿿]/g) ?? []).length
   if (cjkCount >= 2) return true
@@ -254,16 +277,62 @@ function parseStructured(
 
   let currentKind: SectionKind | null = null
   let currentItem: DraftItem | null = null
+  /**
+   * 表格模式。
+   *
+   * PDF 里的表格，列是分开的：同一个项目的名称会被拆成几行，职责又插在中间
+   * （「云宠」/「主导电商核心商品模型设计…」/「SaaS电」/「SKU配置体系」）。
+   * 硬按条目头切只会切出一堆没名没姓的碎片。
+   *
+   * 认出列标题行之后，这个分区剩下的行按内容处理——内容原样保留，不假装它是
+   * 经历条目。
+   */
+  let inTable = false
+  /** 表格的标题（「其他项目经历」）——跟表格内容一起进「其它」。 */
+  let tableCaption = ''
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!
     const kind = headerKindOf(line)
     if (kind) {
       currentKind = kind
       currentItem = null
+      inTable = false
+      tableCaption = ''
       if (kind === 'other') otherHeaders.push(line)
       continue
     }
     if (!currentKind) continue
+
+    if (isTableHeaderLine(line, lines[index + 1])) {
+      inTable = true
+      // 表头前面那行多半是这张表的标题（「其他项目经历」）——它本来被当成了
+      // 上一条的要点，摘下来跟表格一起放，别留在别人的条目下面。
+      const previousLine = lines[index - 1]?.trim()
+      if (previousLine && currentItem?.bullets.at(-1)?.text === previousLine) {
+        currentItem.bullets.pop()
+        tableCaption = previousLine
+      }
+    }
+
+    // 表格里的行一律按内容处理，不切条目——它们进「其它」分区：
+    // 表格的列在 PDF 里是分开的，硬按条目头切只会切出一堆没名没姓的碎片。
+    if (inTable) {
+      const bullet = stripBulletMarker(line)
+      const text = bullet ?? line.trim()
+      if (!text) continue
+      let flatItem = buckets.other.items[0]
+      if (!flatItem) {
+        flatItem = makeItem(seed)
+        buckets.other.items.push(flatItem)
+      }
+      if (tableCaption) {
+        flatItem.bullets.push(makeBullet(tableCaption, seed))
+        tableCaption = ''
+      }
+      flatItem.bullets.push(makeBullet(text, seed))
+      continue
+    }
 
     // 专业技能与「其它」在结构上没有条目头，整个分区就是一行行内容
     if (currentKind === 'skills' || currentKind === 'other') {
