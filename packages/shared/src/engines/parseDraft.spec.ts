@@ -343,3 +343,44 @@ describe('parseDraft 的「其它」分区', () => {
     expect(result.otherHeaders).toEqual([])
   })
 })
+
+describe('parseDraft 的条目排序', () => {
+  const OUT_OF_ORDER = `工作经历
+阿里巴巴 高级工程师 2019.03 - 2021.05
+· 负责搜索相关性
+
+字节跳动 资深工程师 2023.07 - 至今
+· 负责推荐系统
+
+腾讯 前端工程师 2021.06 - 2023.06
+· 负责后台系统
+`
+
+  it('按开始时间倒序排——最近的一段在最前面', () => {
+    const result = parseDraft(OUT_OF_ORDER, CTX, createIdSeed())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const starts = sectionOf(result.draft!, 'experience').items.map((item) => item.start)
+    expect(starts).toEqual(['2023-07', '2021-06', '2019-03'])
+  })
+
+  it('缺开始时间的条目排在后面，彼此保持原文顺序', () => {
+    const result = parseDraft(
+      `工作经历
+· 只有要点没有条目头
+
+阿里巴巴 高级工程师 2019.03 - 2021.05
+· 负责搜索相关性
+`,
+      CTX,
+      createIdSeed(),
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const items = sectionOf(result.draft!, 'experience').items
+    expect(items[items.length - 1]!.start).toBeUndefined()
+    expect(items[0]!.start).toBe('2019-03')
+  })
+})

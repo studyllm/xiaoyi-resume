@@ -342,22 +342,25 @@ describe('useDraftStore', () => {
   it('orders the comments by where they sit in the resume, not by severity', async () => {
     const store = useDraftStore()
     await store.ingest(
-      '工作经历\n甲公司 前端工程师 2021.03 - 2023.01\n· 参与团队协作与日常维护\n乙公司 高级工程师 2023.02 - 至今\n· 负责后端服务开发\n',
+      '工作经历\n甲公司 前端工程师 2021.03 - 2023.01\n· 参与团队协作与日常维护\n乙公司 2023.02 - 至今\n· 负责后端服务开发\n',
     )
     await store.savePending()
     const section = store.draft!.sections.find((entry) => entry.kind === 'experience')!
-    store.updateItemMeta(section.id, section.items[1]!.id, { start: null })
+    // 解析后按时间倒序：乙（更近）在前，甲（更远）在后
+    const later = section.items.find((item) => item.org === '甲公司')!
+    // 让排在后面的那条缺开始时间——它的严重度最高
+    store.updateItemMeta(section.id, later.id, { start: null })
     store.diagnose()
 
     // 引擎按严重度排：缺开始时间是「高」，排在最前
     expect(store.liveIssues[0]!.ruleId).toBe('missing-start')
 
-    // 界面按简历位置排：它在后面，就排在后面
+    // 界面按简历位置排：乙在前，甲的要点在后——与严重度的顺序正好相反
     const anchors = store.orderedIssues.map((issue) => anchorText(issue))
-    const earlier = anchors.findIndex((anchor) => anchor.includes('参与团队协作'))
-    const later = anchors.findIndex((anchor) => anchor.includes('乙公司'))
-    expect(earlier).toBeGreaterThanOrEqual(0)
-    expect(later).toBeGreaterThan(earlier)
+    const earlierAnchor = anchors.findIndex((anchor) => anchor.includes('乙公司'))
+    const laterAnchor = anchors.findIndex((anchor) => anchor.includes('参与团队协作'))
+    expect(earlierAnchor).toBeGreaterThanOrEqual(0)
+    expect(earlierAnchor).toBeLessThan(laterAnchor)
   })
 
   it('stores the months of an entry in a single format', async () => {

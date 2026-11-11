@@ -1,8 +1,13 @@
 import type { IdSeed } from '../domain/ids'
 import { FAILURE_STATES } from '../domain/states'
-import { findDateSpan } from '../domain/time'
+import { compareYearMonth, findDateSpan } from '../domain/time'
 import type { Bullet, Draft, DraftItem, DraftSection, SectionKind } from '../domain/types'
-import { REQUIRED_SECTION_KINDS, SECTION_ORDER, SECTION_TITLES } from '../domain/types'
+import {
+  REQUIRED_SECTION_KINDS,
+  SECTION_ORDER,
+  SECTION_TITLES,
+  hasItemHead,
+} from '../domain/types'
 import { matchCatalog } from './catalog'
 import { extractProfile } from './profile'
 import type { EngineContext, ParseResult } from './types'
@@ -189,9 +194,29 @@ function buildSections(
       id: seed.next('section'),
       kind,
       title: SECTION_TITLES[kind],
-      items: buckets[kind].items,
+      items: sortByRecency(buckets[kind].items, kind),
     }),
   )
+}
+
+/**
+ * 条目按开始时间倒序排——简历本来就该最近的一段在最前面。
+ *
+ * 解析器保留原文顺序，但结构检查要求倒序：一边不排一边报「没有按时间倒序」，
+ * 用户只能自己动手改。**能自动修的就别报错**——这里排完，那类问题就不存在了。
+ *
+ * 没有开始时间的条目排在后面，彼此保持原文顺序。`Array.sort` 是稳定的，
+ * 所以开始时间相同的条目也保持原文顺序。
+ */
+function sortByRecency(items: DraftItem[], kind: SectionKind): DraftItem[] {
+  // 专业技能与「其它」在结构上没有条目头，整个分区就是内容，不排序
+  if (!hasItemHead(kind)) return items
+  return [...items].sort((left, right) => {
+    if (!left.start && !right.start) return 0
+    if (!left.start) return 1
+    if (!right.start) return -1
+    return compareYearMonth(right.start, left.start)
+  })
 }
 
 function parseStructured(
