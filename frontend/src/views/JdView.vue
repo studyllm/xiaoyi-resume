@@ -10,7 +10,7 @@ import { engineContext, useEngines } from '@/stores/engines'
 import { useDraftStore } from '@/stores/draft'
 import { useUiStore } from '@/stores/ui'
 import { useVersionStore } from '@/stores/versions'
-import { FAILURE_STATES, stateMessage } from '@xiaoyi/shared/domain/states'
+import { ALL_STATES, FAILURE_STATES, stateMessage } from '@xiaoyi/shared/domain/states'
 
 const router = useRouter()
 const draftStore = useDraftStore()
@@ -100,7 +100,16 @@ async function generate(): Promise<void> {
       useLlm: useLlm.value,
     })
     generating.value = false
-    ElMessage.success('版本已生成')
+    // 模型没调通时要当场说清——版本详情页虽然也写着，但用户未必会去看
+    if (version.integrity?.degraded) {
+      ElMessage.warning(
+        stateMessage(ALL_STATES['model-degraded']!, {
+          value: version.integrity.degradeReason ?? '模型没有返回可用的结果',
+        }),
+      )
+    } else {
+      ElMessage.success('版本已生成')
+    }
     router.push(`/versions/${version.id}`)
   } catch (error) {
     generating.value = false

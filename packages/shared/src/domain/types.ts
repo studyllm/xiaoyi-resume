@@ -282,6 +282,13 @@ export interface IntegrityReport {
   reverted: number
   /** 这次生成没有完全由模型产出：模型不可用，或有要点被回退 */
   degraded: boolean
+  /**
+   * 为什么没完全用上模型。
+   *
+   * 没有它，界面只能说「模型这次没有用上」——用户还得自己去翻日志才知道是
+   * 余额不足、超时，还是密钥不对。
+   */
+  degradeReason?: string | null
   /** 只记录、不拦截的观察项 */
   observations: IntegrityObservation[]
 }

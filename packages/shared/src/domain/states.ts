@@ -187,6 +187,10 @@ export const FAILURE_STATES = defineStates({
     hint: '这次先用规则引擎生成，结果一样能投。',
     code: 'LLM_UNAVAILABLE',
   },
+  'model-degraded': {
+    title: '模型这次没调通',
+    hint: '{value}。这一版改用规则引擎生成，结果一样能投。',
+  },
   'llm-timeout': {
     title: '模型响应超时',
     hint: '这次先用规则引擎生成，或者稍后再试。',

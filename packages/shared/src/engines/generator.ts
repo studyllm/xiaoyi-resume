@@ -379,6 +379,8 @@ function rulesOutcome(
         ...baseline.version.integrity,
         generator: 'rules',
         degraded: extra.error !== null,
+        // 原因一起带上：界面要能说清「为什么没用上模型」
+        degradeReason: extra.error,
       },
     },
     coverage: baseline.coverage,

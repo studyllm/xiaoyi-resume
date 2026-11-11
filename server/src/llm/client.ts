@@ -121,8 +121,15 @@ async function errorDetail(response: Response): Promise<string> {
   return body.trim().slice(0, 300)
 }
 
-/** 网络错误与 5xx 才值得再试一次。 */function isWorthRetrying(error: unknown): boolean {
+/**
+ * 网络错误与 5xx 才值得再试一次。
+ *
+ * **超时不重试**：同样的输入再发一次，还是那么慢——白等一遍还把用户的等待
+ * 时间翻倍。生成一整版简历本来就慢。
+ */
+function isWorthRetrying(error: unknown): boolean {
   if (!(error instanceof Error)) return false
+  if (error.name === 'TimeoutError' || error.name === 'AbortError') return false
   const status = (error as Error & { status?: number }).status
   if (status === undefined) return true
   return status >= 500

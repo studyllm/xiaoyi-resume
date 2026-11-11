@@ -85,7 +85,11 @@ const integrityText = computed(() => {
   }
 
   if (degraded) {
-    return `模型这次没有用上，这一版由规则引擎生成（${checked} 条已校验）`
+    // 原因要一起说：只说「没用上」，用户还得自己去翻日志
+    const reason = integrity.degradeReason
+    return reason
+      ? `模型这次没有用上（${reason}），这一版由规则引擎生成（${checked} 条已校验）`
+      : `模型这次没有用上，这一版由规则引擎生成（${checked} 条已校验）`
   }
 
   if (integrity.violations.length === 0) {

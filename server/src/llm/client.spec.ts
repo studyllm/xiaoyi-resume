@@ -74,6 +74,22 @@ describe('OpenAI 兼容客户端', () => {
     expect(result.text).toBe('好了')
   })
 
+  it('超时时不重试——同样的输入再发一次还是那么慢', async () => {
+    let attempts = 0
+    const chat = createOpenAiChat(CONFIG, {
+      fetchImpl: async () => {
+        attempts += 1
+        // AbortSignal.timeout 触发的就是这个
+        const error = new Error('The operation was aborted due to timeout')
+        error.name = 'TimeoutError'
+        throw error
+      },
+    })
+
+    await expect(chat(REQUEST)).rejects.toThrow(/timeout/)
+    expect(attempts).toBe(1)
+  })
+
   it('模型返回 4xx 时不重试——重试没有意义', async () => {
     let attempts = 0
     const chat = createOpenAiChat(
