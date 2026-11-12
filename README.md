@@ -121,7 +121,7 @@ docs/                需求文档、开发计划、决策记录、运维手册
 - [门禁与 CI 说明](docs/ci/README.md)
 - [运维手册](docs/ops/runbook.md)
 - 决策记录：[ADR-0001 引擎模式开关](docs/adr/0001-engine-mode-switch.md)、[ADR-0002 鉴权模型](docs/adr/0002-auth-model.md)、[ADR-0003 事实账本与校验器](docs/adr/0003-integrity-verifier.md)、[ADR-0004 引擎位置](docs/adr/0004-engine-placement.md)、[ADR-0005 模型接入形态](docs/adr/0005-llm-access-shape.md)
-- 开发规范见 [CLAUDE.md](CLAUDE.md)
+- 开发规范见 [AGENTS.md](AGENTS.md)
 
 ## License
 
