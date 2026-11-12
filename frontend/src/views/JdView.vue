@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import EmptyState from '@/components/EmptyState.vue'
@@ -10,7 +10,14 @@ import { engineContext, useEngines } from '@/stores/engines'
 import { useDraftStore } from '@/stores/draft'
 import { useUiStore } from '@/stores/ui'
 import { useVersionStore } from '@/stores/versions'
-import { FAILURE_STATES, stateMessage } from '@xiaoyi/shared/domain/states'
+import {
+  ALL_STATES,
+  FAILURE_STATES,
+  STATUS_STATES,
+  stateHint,
+  stateMessage,
+  stateTitle,
+} from '@xiaoyi/shared/domain/states'
 
 const router = useRouter()
 const draftStore = useDraftStore()
@@ -26,6 +33,38 @@ const roleSource = ref('')
 const coverage = ref<RequirementCoverage[]>([])
 const warnings = ref<string[]>([])
 const generating = ref(false)
+/** 已经等了多久。模型改写一整版简历要 1-2 分钟，用户需要知道还在跑。 */
+const waitedSeconds = ref(0)
+let waitTimer: ReturnType<typeof setInterval> | null = null
+
+const generatingTitle = computed(() =>
+  useLlm.value
+    ? stateTitle(STATUS_STATES['generating-with-model']!)
+    : stateTitle(STATUS_STATES['generating-with-rules']!),
+)
+
+const generatingHint = computed(() =>
+  useLlm.value
+    ? stateHint(STATUS_STATES['generating-with-model']!, { value: waitedSeconds.value })
+    : stateHint(STATUS_STATES['generating-with-rules']!),
+)
+
+/** 开始计时。服务端是同步调用，前端不知道真进度——只能如实说「还在等」。 */
+function startWaiting(): void {
+  waitedSeconds.value = 0
+  stopWaiting()
+  waitTimer = setInterval(() => {
+    waitedSeconds.value += 1
+  }, 1000)
+}
+
+function stopWaiting(): void {
+  if (waitTimer === null) return
+  clearInterval(waitTimer)
+  waitTimer = null
+}
+
+onBeforeUnmount(stopWaiting)
 const allowVerbFronting = ref(true)
 const dropIrrelevantProjects = ref(true)
 /** 服务端有没有配模型供应商。没配就不显示那个开关。 */
@@ -89,6 +128,7 @@ async function generate(): Promise<void> {
   }
 
   generating.value = true
+  startWaiting()
   try {
     if (await draftStore.saveIfDirty()) {
       ElMessage.info('简历有未保存的修改，已先保存再生成版本')
@@ -100,10 +140,21 @@ async function generate(): Promise<void> {
       useLlm: useLlm.value,
     })
     generating.value = false
-    ElMessage.success('版本已生成')
+    stopWaiting()
+    // 模型没调通时要当场说清——版本详情页虽然也写着，但用户未必会去看
+    if (version.integrity?.degraded) {
+      ElMessage.warning(
+        stateMessage(ALL_STATES['model-degraded']!, {
+          value: version.integrity.degradeReason ?? '模型没有返回可用的结果',
+        }),
+      )
+    } else {
+      ElMessage.success('版本已生成')
+    }
     router.push(`/versions/${version.id}`)
   } catch (error) {
     generating.value = false
+    stopWaiting()
     ElMessage.error(error instanceof Error ? error.message : stateMessage(FAILURE_STATES['generate-failed']))
   }
 }
@@ -242,6 +293,16 @@ watch(
     </el-card>
 
     <EmptyState v-if="step >= 1 && coverage.length === 0" state="jd-no-requirements" @action="focusJdInput" />
+
+    <el-alert
+      v-if="generating"
+      class="card-block"
+      type="info"
+      show-icon
+      :closable="false"
+      :title="generatingTitle"
+      :description="generatingHint"
+    />
 
     <div class="inline-row">
       <el-button type="primary" size="small" :loading="generating" :disabled="step < 1" @click="generate">

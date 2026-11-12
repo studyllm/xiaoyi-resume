@@ -187,6 +187,10 @@ export const FAILURE_STATES = defineStates({
     hint: '这次先用规则引擎生成，结果一样能投。',
     code: 'LLM_UNAVAILABLE',
   },
+  'model-degraded': {
+    title: '模型这次没调通',
+    hint: '{value}。这一版改用规则引擎生成，结果一样能投。',
+  },
   'llm-timeout': {
     title: '模型响应超时',
     hint: '这次先用规则引擎生成，或者稍后再试。',
@@ -337,6 +341,14 @@ export type WarningState = keyof typeof WARNING_STATES
  * 用于向读屏软件播报的状态行——这类文案不需要「下一步」，说明写清含义即可。
  */
 export const STATUS_STATES = defineStates({
+  'generating-with-model': {
+    title: '正在等模型改写',
+    hint: '已等待 {value} 秒。模型要把全部要点改写一遍，通常要 1-2 分钟；调不通时会自动改用规则引擎，结果一样能投。',
+  },
+  'generating-with-rules': {
+    title: '正在生成',
+    hint: '正在按规则引擎重组你的简历，通常几秒就好。',
+  },
   'draft-dirty': {
     title: '简历有未保存的修改',
     hint: '保存之后这个标记会消失。',

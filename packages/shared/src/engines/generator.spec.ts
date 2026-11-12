@@ -264,6 +264,8 @@ describe('模型生成器', () => {
     expect(result.version.integrity.generator).toBe('rules')
     expect(result.version.integrity.degraded).toBe(true)
     expect(result.trace.error).toBe('模型超时')
+    // 原因也要进版本：界面要能说清「为什么没用上模型」
+    expect(result.version.integrity.degradeReason).toBe('模型超时')
   })
 
   it('模型返回无法解析的内容时整版降级', async () => {

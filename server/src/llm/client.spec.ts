@@ -74,6 +74,22 @@ describe('OpenAI 兼容客户端', () => {
     expect(result.text).toBe('好了')
   })
 
+  it('超时时不重试——同样的输入再发一次还是那么慢', async () => {
+    let attempts = 0
+    const chat = createOpenAiChat(CONFIG, {
+      fetchImpl: async () => {
+        attempts += 1
+        // AbortSignal.timeout 触发的就是这个
+        const error = new Error('The operation was aborted due to timeout')
+        error.name = 'TimeoutError'
+        throw error
+      },
+    })
+
+    await expect(chat(REQUEST)).rejects.toThrow(/timeout/)
+    expect(attempts).toBe(1)
+  })
+
   it('模型返回 4xx 时不重试——重试没有意义', async () => {
     let attempts = 0
     const chat = createOpenAiChat(
@@ -89,6 +105,28 @@ describe('OpenAI 兼容客户端', () => {
 
     await expect(chat(REQUEST)).rejects.toThrow('模型返回 401')
     expect(attempts).toBe(1)
+  })
+
+  it('报错时带上服务商自己说的原因', async () => {
+    // 只留状态码是不够的：402 与 401 都是「没调通」，但一个是余额不足、
+    // 一个是密钥不对——只有服务商自己说得清。
+    const chat = createOpenAiChat(CONFIG, {
+      fetchImpl: async () =>
+        jsonResponse(
+          { error: { type: 'insufficient_balance_error', message: 'insufficient balance (1008)' } },
+          402,
+        ),
+    })
+
+    await expect(chat(REQUEST)).rejects.toThrow(/402.*insufficient balance/)
+  })
+
+  it('服务商没有给结构化正文时也把正文带上', async () => {
+    const chat = createOpenAiChat(CONFIG, {
+      fetchImpl: async () => new Response('upstream exploded', { status: 500 }),
+    })
+
+    await expect(chat(REQUEST)).rejects.toThrow(/500.*upstream exploded/)
   })
 
   it('模型返回空内容时报错', async () => {
