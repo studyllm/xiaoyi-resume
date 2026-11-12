@@ -6,6 +6,11 @@ interface ImportMetaEnv {
    * 未知取值一律回落到本地规则引擎，不报错也不白屏。
    */
   readonly VITE_ENGINE_MODE?: 'mock' | 'remote'
+  /**
+   * 产品名。顶栏、落地页品牌文字和浏览器标题都用它。
+   * 留空或未设置时用「小奕·简历」。
+   */
+  readonly VITE_PRODUCT_NAME?: string
 }
 
 interface ImportMeta {

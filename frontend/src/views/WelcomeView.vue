@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { productName } from '@/config/product'
 import IdentityDialog from '@/components/IdentityDialog.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import ResumePreview, { type PreviewHighlight } from '@/components/ResumePreview.vue'
@@ -9,6 +10,8 @@ import { SHOWCASE_COMMENTS, SHOWCASE_FRAGMENT_SECTIONS } from '@/mock/showcase'
 import { loadDemoData } from '@/mock/loadDemo'
 import { FAILURE_STATES, stateMessage } from '@xiaoyi/shared/domain/states'
 import { useDraftStore } from '@/stores/draft'
+
+const brandName = productName()
 
 const router = useRouter()
 const route = useRoute()
@@ -97,7 +100,7 @@ const features = [
       <div class="landing-container landing-header-inner">
         <span class="landing-brand">
           <BrandLogo variant="landing" />
-          <span>小奕·简历</span>
+          <span>{{ brandName }}</span>
         </span>
         <el-tag type="warning" effect="plain">原型演示模式</el-tag>
       </div>
