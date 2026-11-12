@@ -144,6 +144,19 @@ psql postgres://.../xiaoyi -c "insert into users select * from xiaoyi_restore.us
 2. 看邮件服务商的投递结果（拒信、延迟、退信）
 3. **检查 `SITE_URL`**——链接指向它，配错的话用户点开是 404，而且链接里的令牌是好的，排查起来容易误判成「令牌失效」
 
+### 5.2 登录后所有接口都 500
+
+| 用户看到的 | 原因 | 怎么办 |
+| --- | --- | --- |
+| 日志里是 `Failed query: select …`，且提到某个列或表不存在 | **库比代码旧**——代码里的新迁移没跑 | `npm run db:migrate` 然后重启服务端 |
+
+跑完迁移后确认一下：
+
+```bash
+npm run db:migrate
+curl -s localhost:3000/api/v1/healthz   # {"ok":true}
+```
+
 ### 5.3 保存简历失败
 
 | 用户看到的 | 原因 | 怎么办 |
