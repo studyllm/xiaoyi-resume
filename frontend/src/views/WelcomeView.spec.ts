@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
+import { productName } from '@/config/product'
 import IdentityDialog from '@/components/IdentityDialog.vue'
 import { useDraftStore } from '@/stores/draft'
 import { useSessionStore } from '@/stores/session'
@@ -140,6 +141,11 @@ describe('落地页', () => {
     expect(paper.text()).toContain('工作经历')
     expect(paper.text()).toContain('负责公司营销活动页面的前端开发')
     expect(paper.findAll('mark')).toHaveLength(3)
+  })
+
+  it('顶栏品牌用配置里的产品名', async () => {
+    const { wrapper } = await mountLanding()
+    expect(wrapper.find('.landing-brand').text()).toBe(productName())
   })
 
   it('顶栏与首屏内容共用同一个容器', async () => {

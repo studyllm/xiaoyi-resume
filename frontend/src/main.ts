@@ -1,6 +1,8 @@
 import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
 
+import { documentTitle } from './config/productName'
+import { productName } from './config/product'
 import App from './App.vue'
 import router from './router'
 import { useDraftStore } from './stores/draft'
@@ -8,6 +10,8 @@ import { useSessionStore } from './stores/session'
 import { useVersionStore } from './stores/versions'
 import { splitLegacySlots } from './stores/persistence'
 import './styles/main.css'
+
+document.title = documentTitle(productName())
 
 const app = createApp(App)
 

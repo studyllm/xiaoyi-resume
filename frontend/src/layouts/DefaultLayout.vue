@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Document, Files, MagicStick, Promotion } from '@element-plus/icons-vue'
 
+import { productName } from '@/config/product'
 import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 import { rendersWorkbench, usesDrawer } from '@xiaoyi/shared/domain/breakpoints'
@@ -17,6 +18,8 @@ import { useDraftStore } from '@/stores/draft'
 import { persistence } from '@/stores/persistence'
 import { useSessionStore } from '@/stores/session'
 import { useUiStore } from '@/stores/ui'
+
+const brandName = productName()
 
 const route = useRoute()
 const router = useRouter()
@@ -102,7 +105,7 @@ async function logout(): Promise<void> {
         </el-button>
         <router-link to="/" class="layout-title" title="回到首页">
           <BrandLogo variant="bar" />
-          <span>小奕·简历</span>
+          <span>{{ brandName }}</span>
         </router-link>
         <el-tag type="warning" effect="plain">演示模式</el-tag>
       </div>
