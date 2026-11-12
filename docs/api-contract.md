@@ -191,7 +191,7 @@ POST /api/v1/diagnosis
 → 200 { "state": "result", "issues": [ { "id": "iss_…", "severity": "high", "category": "…", "problem": "…", "suggestion": "…", "bulletId": "…" } ], "draftRevision": 4 }
 ```
 
-- 无请求体：**诊断跑在已保存的底稿上**。诊断页看的就是保存后的那份（`CLAUDE.md` §5.2）。
+- 无请求体：**诊断跑在已保存的底稿上**。诊断页看的就是保存后的那份（`AGENTS.md` §5.2）。
 - `state` 三态：`none`（没诊断过）/ `empty`（诊断了但零意见）/ `result`（有意见）。**与前端的三态一一对应**——前端的空状态分支直接由它决定（`resume-comment-anchoring` 规格）。
 - `draftRevision` 用于「底稿更新后诊断结果失效」：底稿修订号变了，`state` 回到 `none`。
 
@@ -232,7 +232,7 @@ GET /api/v1/versions/:id/body?format=markdown
 → 200 { "format": "markdown", "text": "# 美团 前端工程师\n…" }
 ```
 
-`format=text|markdown`。PDF 不在这里——导出走浏览器打印（`CLAUDE.md` §5.8），服务端不生成 PDF。
+`format=text|markdown`。PDF 不在这里——导出走浏览器打印（`AGENTS.md` §5.8），服务端不生成 PDF。
 
 ---
 
@@ -279,7 +279,7 @@ GET /api/v1/versions/:id/body?format=markdown
 
 `invalid-credentials`、`email-not-verified`、`email-taken`、`invalid-reset-token`、`draft-conflict`、`llm-unavailable`、`llm-timeout`、`rate-limited`、`validation-failed`、`internal-error`。
 
-补的时候按 `CLAUDE.md` §7 的用词规则走，**并且每条都要有下一步**（`error-states` 规格）。
+补的时候按 `AGENTS.md` §7 的用词规则走，**并且每条都要有下一步**（`error-states` 规格）。
 
 ---
 
