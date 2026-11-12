@@ -34,6 +34,7 @@ import {
   buildUncovered,
   diffReason,
   itemLabel,
+  recomputeCoverageAfterRemoval,
   tierRank,
 } from './versionAssembly'
 import type {
@@ -72,9 +73,15 @@ export function generateVersion(
     maxBulletsPerItem = DEFAULT_MAX_BULLETS,
   } = options
 
-  const { jd } = parseJd(jdText, ctx, seed, existingVersionCount)
+  // **给了分析结果就用它**：要求列表、分档、要点关联都来自那份分析，
+  // 版本里的覆盖与未覆盖清单因此与用户在第二步看到的是同一份。
+  // 没给就走规则路径——产物逐字不变。
+  const analysis = options.analysis ?? null
+  const { jd } = analysis
+    ? { jd: { ...analysis.jd, rawText: jdText } }
+    : parseJd(jdText, ctx, seed, existingVersionCount)
 
-  const evidence = collectEvidence(draft, jd)
+  const evidence = analysis ? analysis.evidence : collectEvidence(draft, jd)
   const evidenceByItem = new Map<string, BulletEvidence[]>()
   for (const entry of evidence) {
     const list = evidenceByItem.get(entry.itemId) ?? []
@@ -82,7 +89,7 @@ export function generateVersion(
     evidenceByItem.set(entry.itemId, list)
   }
 
-  const baselineCoverage = computeCoverage(draft, jd, evidence)
+  const baselineCoverage = analysis ? analysis.coverage : computeCoverage(draft, jd, evidence)
 
   const projectSection = draft.sections.find((section) => section.kind === 'project')
   const planned: PlannedItem[] = []
@@ -128,9 +135,42 @@ export function generateVersion(
     })),
   })
 
+  /**
+   * 要点 id → 正文。模型路径重算覆盖时要靠它判断幸存的要点还有没有结果信号。
+   */
+  const matchedTexts = new Map<string, string>()
+  for (const section of draft.sections) {
+    for (const item of section.items) {
+      for (const bullet of item.bullets) matchedTexts.set(bullet.id, bullet.text)
+    }
+  }
+
+  /** 删减后没了的要点 id。模型路径重算覆盖时要知道哪些引用失效了。 */
+  const removedIdsOf = (snapshot: Draft): Set<string> => {
+    const kept = new Set<string>()
+    for (const section of snapshot.sections) {
+      for (const item of section.items) {
+        for (const bullet of item.bullets) kept.add(bullet.id)
+      }
+    }
+    const removed = new Set<string>()
+    for (const id of matchedTexts.keys()) {
+      if (!kept.has(id)) removed.add(id)
+    }
+    return removed
+  }
+
+  /**
+   * 覆盖保护闸门要数的东西：删减后有几条要求的覆盖级别下降了。
+   *
+   * 规则路径重算一遍覆盖。模型路径重算不了——模型的分档不是一个能推出来的式子，
+   * 所以按幸存的引用重算（`recomputeCoverageAfterRemoval`）。
+   */
   const degradedCount = (items: PlannedItem[]): number => {
     const snapshot = draftWith(items)
-    const coverage = computeCoverage(snapshot, jd, collectEvidence(snapshot, jd))
+    const coverage = analysis
+      ? recomputeCoverageAfterRemoval(baselineCoverage, matchedTexts, removedIdsOf(snapshot))
+      : computeCoverage(snapshot, jd, collectEvidence(snapshot, jd))
     return coverage.filter(
       (entry, index) =>
         baselineCoverage[index] && tierRank(baselineCoverage[index]!.tier) > tierRank(entry.tier),
@@ -297,7 +337,9 @@ export function generateVersion(
     versionSections.push({ kind, title: SECTION_TITLES[kind], items: versionItems })
   }
 
-  const finalCoverage = computeCoverage(draft, jd, evidence)
+  // 覆盖清单说的是**简历本身**对 JD 的覆盖情况，不是这一版删减后的——
+  // 两条路径都按这个口径：规则路径重算一遍，模型路径直接用分析那份。
+  const finalCoverage = analysis ? analysis.coverage : computeCoverage(draft, jd, evidence)
   const uncovered = buildUncovered(finalCoverage, jd)
   const profile = {
     name: draft.profile?.name ?? '',
@@ -322,6 +364,8 @@ export function generateVersion(
     diff: diffEntries,
     uncovered,
     coverage: finalCoverage,
+    coverageEngine: analysis?.engine ?? 'rules',
+    coverageDegradeReason: analysis?.degradeReason ?? null,
     integrity: {
       checked,
       violations: integrityViolations,

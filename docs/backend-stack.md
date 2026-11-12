@@ -98,12 +98,13 @@ export const saveResume = {
 
 | 表 | 内容 | 备注 |
 | --- | --- | --- |
-| `users` | `id`（UUID）、`email`（规范化）、`email_verified_at`、`password_hash` | `id` 不可猜测、不含邮箱（F5） |
+| `users` | `id`（UUID）、`email`（规范化）、`email_verified_at`、`password_hash`、`model_consent_at` | `id` 不可猜测、不含邮箱（F5）。`model_consent_at` 是账号级同意的凭据——**没有它就是没同意** |
 | `sessions` | `id`、`user_id`、`expires_at` | 登出全清靠它 |
 | `verification_tokens` | `user_id`、`kind`（验证 / 重置）、`token_hash`、`expires_at` | **只存哈希** |
 | `drafts` | `user_id`（唯一）、`payload`（JSONB）、`revision` | 一账号一份底稿 |
 | `versions` | `id`、`user_id`、`payload`（JSONB）、`created_at` | 版本快照，不可变 |
 | `generations` | `user_id`、`engine`、`model`、`prompt_version`、`draft_revision`、`jd_hash`、`status`、`prompt_tokens`、`completion_tokens`、`claims`、`reverted`、`raw_output`、`error` | 生成日志。**输入用引用，不复制简历正文**（ADR-0005 §5） |
+| `jd_analyses` | `user_id`、`draft_revision`、`jd_hash`、`mode`、`engine`、`model`、`prompt_version`、`status`、`prompt_tokens`、`completion_tokens`、`degrade_reason`、`payload`（JSONB）、`created_at` | JD 比对结果。唯一索引 `(user_id, draft_revision, jd_hash, mode)`：**同一把键只算一次**，不重复调模型（ADR-0005 §3「同输入缓存」）。**不含简历正文**——payload 里是 JD 的要求与命中结论，正文仍在 `drafts` 里 |
 
 简历与版本存 JSONB，不拆关系表——它们是树形结构，硬拆成表比 JSONB 更复杂。**账号隔离靠外键与查询条件，不靠前端**（计划 A3.2 要求后端断言）。
 

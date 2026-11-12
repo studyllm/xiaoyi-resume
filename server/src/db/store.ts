@@ -6,10 +6,11 @@ import { and, desc, eq } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 
 import type { Draft, ResumeVersion } from '@xiaoyi/shared/domain/types'
+import type { StoredJdAnalysisPayload } from '@xiaoyi/shared/engines/types'
 
 import type { VerificationTokenKind } from './schema'
 import * as schema from './schema'
-import { drafts, generations, sessions, users, verificationTokens, versions } from './schema'
+import { drafts, generations, jdAnalyses, sessions, users, verificationTokens, versions } from './schema'
 
 /** Postgres 数据库句柄。 */
 export type PostgresDatabase = NodePgDatabase<typeof schema>
@@ -50,6 +51,8 @@ export interface StoredUser {
   email: string
   passwordHash: string
   emailVerifiedAt: Date | null
+  /** 同意把简历内容发给模型供应商的时刻。没有就是没同意。 */
+  modelConsentAt: Date | null
   createdAt: Date
 }
 
@@ -77,6 +80,33 @@ export interface StoredGeneration {
   reverted: number
   rawOutput: string | null
   error: string | null
+}
+
+/** JD 比对结果的一行。 */
+export interface StoredJdAnalysis {
+  id: string
+  userId: string
+  draftRevision: number
+  jdHash: string
+  /** 'llm'（模型比对）或 'rules'（关键词目录匹配）。 */
+  mode: 'llm' | 'rules'
+  model: string | null
+  promptVersion: string | null
+  status: 'ok' | 'degraded' | 'error'
+  promptTokens: number
+  completionTokens: number
+  degradeReason: string | null
+  /** 分析结果本身。 */
+  payload: StoredJdAnalysisPayload
+  createdAt: Date
+}
+
+/** 比对的缓存键。同一把键上只算一次。 */
+export interface JdAnalysisKey {
+  userId: string
+  draftRevision: number
+  jdHash: string
+  mode: 'llm' | 'rules'
 }
 
 export interface StoredVerificationToken {
@@ -143,11 +173,35 @@ export interface Store {
   addGeneration(input: Omit<StoredGeneration, 'id' | 'createdAt'> & { id?: string }): Promise<void>
   /** 这个账号的生成记录，按时间倒序。 */
   listGenerations(userId: string, limit?: number): Promise<StoredGeneration[]>
+
+  /** 记下这个账号同意了把简历内容发给模型供应商。 */
+  recordModelConsent(userId: string): Promise<void>
+  /** 这个账号有没有同意过。没有就是没同意。 */
+  modelConsentAt(userId: string): Promise<Date | null>
+
+  /** 按键读一次比对结果。同键只算一次。 */
+  findJdAnalysis(key: JdAnalysisKey): Promise<StoredJdAnalysis | null>
+  /** 存一次比对结果。同一把键覆盖旧的那一份。 */
+  saveJdAnalysis(input: Omit<StoredJdAnalysis, 'id' | 'createdAt'> & { id?: string }): Promise<void>
+  /** 这个账号的比对记录，按时间倒序。 */
+  listJdAnalyses(userId: string, limit?: number): Promise<StoredJdAnalysis[]>
+  /** 删掉这个账号最旧的比对记录，只留最近的若干份。 */
+  pruneJdAnalyses(userId: string, keep: number): Promise<void>
 }
 
 /** 邮箱规范化：去空白、转小写。登录与注册都用同一套。 */
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
+}
+
+/** 两份比对是不是同一把键。 */
+function sameAnalysisKey(row: StoredJdAnalysis, key: JdAnalysisKey): boolean {
+  return (
+    row.userId === key.userId &&
+    row.draftRevision === key.draftRevision &&
+    row.jdHash === key.jdHash &&
+    row.mode === key.mode
+  )
 }
 
 /** 内存实现。测试用；语义与 Postgres 实现一致。 */
@@ -157,6 +211,7 @@ export function createMemoryStore(): Store {
   const tokenRows = new Map<string, StoredVerificationToken>()
   const draftRows = new Map<string, { userId: string; payload: Draft; revision: number; updatedAt: Date }>()
   const generationRows = new Map<string, StoredGeneration>()
+  const analysisRows = new Map<string, StoredJdAnalysis>()
   const versionRows = new Map<
     string,
     { id: string; userId: string; payload: ResumeVersion; createdAt: Date }
@@ -169,6 +224,7 @@ export function createMemoryStore(): Store {
         email: normalizeEmail(email),
         passwordHash,
         emailVerifiedAt: null,
+        modelConsentAt: null,
         createdAt: new Date(),
       }
       userRows.set(row.id, row)
@@ -200,6 +256,13 @@ export function createMemoryStore(): Store {
     async setPasswordHash(userId, passwordHash) {
       const row = userRows.get(userId)
       if (row) row.passwordHash = passwordHash
+    },
+    async recordModelConsent(userId) {
+      const row = userRows.get(userId)
+      if (row) row.modelConsentAt = new Date()
+    },
+    async modelConsentAt(userId) {
+      return userRows.get(userId)?.modelConsentAt ?? null
     },
 
     async createSession({ id, userId, expiresAt }) {
@@ -275,6 +338,36 @@ export function createMemoryStore(): Store {
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
         .slice(0, limit)
     },
+
+    async findJdAnalysis(key) {
+      for (const row of analysisRows.values()) {
+        if (sameAnalysisKey(row, key)) return row
+      }
+      return null
+    },
+    async saveJdAnalysis(input) {
+      // 同一把键覆盖旧的那一份——键相同就说明是同一次分析
+      const existing = [...analysisRows.values()].find((row) => sameAnalysisKey(row, input))
+      const row: StoredJdAnalysis = {
+        ...input,
+        // 空串也是「没给 id」——`??` 只挡 null 与 undefined
+        id: existing?.id ?? (input.id || randomUUID()),
+        createdAt: new Date(),
+      }
+      analysisRows.set(row.id, row)
+    },
+    async listJdAnalyses(userId, limit = 50) {
+      return [...analysisRows.values()]
+        .filter((row) => row.userId === userId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, limit)
+    },
+    async pruneJdAnalyses(userId, keep) {
+      const rows = [...analysisRows.values()]
+        .filter((row) => row.userId === userId)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      for (const row of rows.slice(keep)) analysisRows.delete(row.id)
+    },
   }
 }
 
@@ -287,6 +380,7 @@ export function createPostgresStore(db: PostgresDatabase): Store {
         email: normalizeEmail(email),
         passwordHash,
         emailVerifiedAt: null,
+        modelConsentAt: null,
         createdAt: new Date(),
       }
       await db.insert(users).values(row)
@@ -311,6 +405,13 @@ export function createPostgresStore(db: PostgresDatabase): Store {
     },
     async setPasswordHash(userId, passwordHash) {
       await db.update(users).set({ passwordHash }).where(eq(users.id, userId))
+    },
+    async recordModelConsent(userId) {
+      await db.update(users).set({ modelConsentAt: new Date() }).where(eq(users.id, userId))
+    },
+    async modelConsentAt(userId) {
+      const rows = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+      return rows[0]?.modelConsentAt ?? null
     },
 
     async createSession({ id, userId, expiresAt }) {
@@ -403,6 +504,90 @@ export function createPostgresStore(db: PostgresDatabase): Store {
         .orderBy(desc(generations.createdAt))
         .limit(limit)
       return rows as StoredGeneration[]
+    },
+
+    async findJdAnalysis(key) {
+      const rows = await db
+        .select()
+        .from(jdAnalyses)
+        .where(
+          and(
+            eq(jdAnalyses.userId, key.userId),
+            eq(jdAnalyses.draftRevision, key.draftRevision),
+            eq(jdAnalyses.jdHash, key.jdHash),
+            eq(jdAnalyses.mode, key.mode),
+          ),
+        )
+        .limit(1)
+      const row = rows[0]
+      return row
+        ? ({
+            ...row,
+            mode: row.mode as 'llm' | 'rules',
+            status: row.status as 'ok' | 'degraded' | 'error',
+            payload: row.payload as StoredJdAnalysisPayload,
+          } satisfies StoredJdAnalysis)
+        : null
+    },
+    async saveJdAnalysis(input) {
+      await db
+        .insert(jdAnalyses)
+        .values({
+          // 空串也是「没给 id」——`??` 只挡 null 与 undefined
+          id: input.id || randomUUID(),
+          userId: input.userId,
+          draftRevision: input.draftRevision,
+          jdHash: input.jdHash,
+          mode: input.mode,
+          model: input.model,
+          promptVersion: input.promptVersion,
+          status: input.status,
+          promptTokens: input.promptTokens,
+          completionTokens: input.completionTokens,
+          degradeReason: input.degradeReason,
+          payload: input.payload,
+          createdAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [jdAnalyses.userId, jdAnalyses.draftRevision, jdAnalyses.jdHash, jdAnalyses.mode],
+          set: {
+            model: input.model,
+            promptVersion: input.promptVersion,
+            status: input.status,
+            promptTokens: input.promptTokens,
+            completionTokens: input.completionTokens,
+            degradeReason: input.degradeReason,
+            payload: input.payload,
+            createdAt: new Date(),
+          },
+        })
+    },
+    async listJdAnalyses(userId, limit = 50) {
+      const rows = await db
+        .select()
+        .from(jdAnalyses)
+        .where(eq(jdAnalyses.userId, userId))
+        .orderBy(desc(jdAnalyses.createdAt))
+        .limit(limit)
+      return rows.map(
+        (row) =>
+          ({
+            ...row,
+            mode: row.mode as 'llm' | 'rules',
+            status: row.status as 'ok' | 'degraded' | 'error',
+            payload: row.payload as StoredJdAnalysisPayload,
+          }) satisfies StoredJdAnalysis,
+      )
+    },
+    async pruneJdAnalyses(userId, keep) {
+      const rows = await db
+        .select({ id: jdAnalyses.id })
+        .from(jdAnalyses)
+        .where(eq(jdAnalyses.userId, userId))
+        .orderBy(desc(jdAnalyses.createdAt))
+      for (const row of rows.slice(keep)) {
+        await db.delete(jdAnalyses).where(eq(jdAnalyses.id, row.id))
+      }
     },
   }
 }

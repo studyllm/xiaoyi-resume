@@ -1,5 +1,6 @@
 import { api } from './client'
 import type { Draft, ResumeVersion } from '@xiaoyi/shared/domain/types'
+import type { JdRequirement, RequirementCoverage, RoleNameSource } from '@xiaoyi/shared/domain/types'
 
 export interface DraftResponse {
   draft: Draft
@@ -110,4 +111,48 @@ export function importLocalDraft(input: {
  */
 export function fetchEngineStatus(signal?: AbortSignal): Promise<{ available: boolean }> {
   return api<{ available: boolean }>('/api/v1/engine', { signal })
+}
+
+/** 一份 JD 比对的结果。 */
+export interface JdAnalysisResponse {
+  analysisId: string
+  roleName: string
+  roleNameSource: RoleNameSource
+  requirements: JdRequirement[]
+  coverage: RequirementCoverage[]
+  warnings: string[]
+  /** 谁做的这次比对。 */
+  engine: 'rules' | 'llm'
+  /** 这次没有完全用上模型（模型不可用、回落了规则目录）。 */
+  degraded: boolean
+  /** 没完全用上的原因。 */
+  degradeReason: string | null
+}
+
+/**
+ * 比对一份 JD 与你的简历。
+ *
+ * **跑在已保存的简历上**——前端要先存再分析。
+ *
+ * 同一份简历与同一份 JD 重复解析时，服务端直接返回第一次的结果，
+ * 不会重复调模型（`docs/api-contract.md` §6）。
+ */
+export function analyzeJd(
+  jdText: string,
+  options?: { useLlm?: boolean },
+): Promise<JdAnalysisResponse> {
+  return api<JdAnalysisResponse>('/api/v1/jd/analyze', {
+    method: 'POST',
+    body: { jdText, options: { useLlm: options?.useLlm === true } },
+  })
+}
+
+/**
+ * 记下这个账号同意把简历内容发给模型供应商。
+ *
+ * 老账号没有同意记录时，用户在界面上打开「本次用模型」会走到这里——
+ * **那一刻就是他的点头**。
+ */
+export function recordModelConsent(): Promise<{ modelConsentAt: string }> {
+  return api<{ modelConsentAt: string }>('/api/v1/me/model-consent', { method: 'POST' })
 }

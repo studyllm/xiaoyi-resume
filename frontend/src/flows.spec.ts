@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -92,20 +93,30 @@ vi.mock('@/api/resume', async () => {
 
 const INTERNAL_TERM = '底稿'
 
+/**
+ * 目录的绝对路径。
+ *
+ * **用 `fileURLToPath` 而不是 `URL.pathname`**——后者在 Windows 上给出
+ * `/D:/...`，拼出来的路径解析不出来，守卫读不到文件就整片红。
+ */
+function directoryOf(relative: string): string {
+  return fileURLToPath(new URL(relative, import.meta.url))
+}
+
 function viewsDirectory(): string {
-  return new URL('./views/', import.meta.url).pathname
+  return directoryOf('./views/')
 }
 
 function componentsDirectory(): string {
-  return new URL('./components/', import.meta.url).pathname
+  return directoryOf('./components/')
 }
 
 function layoutsDirectory(): string {
-  return new URL('./layouts/', import.meta.url).pathname
+  return directoryOf('./layouts/')
 }
 
 function storesDirectory(): string {
-  return new URL('./stores/', import.meta.url).pathname
+  return directoryOf('./stores/')
 }
 
 interface TemplateEntry {

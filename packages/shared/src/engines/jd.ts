@@ -181,7 +181,13 @@ export function extractCorePhrases(text: string): string[] {
   return [...new Set(phrases)].sort((left, right) => right.length - left.length).slice(0, 2)
 }
 
-function detectRoleName(
+/**
+ * 认出 JD 里的岗位名。
+ *
+ * **导出**是因为模型比对那条路也要用它——岗位名由规则出，不由模型出
+ * （见 `jdAnalysis.ts` 的说明）。
+ */
+export function detectRoleName(
   lines: string[],
   fallbackIndex: number,
 ): { name: string; source: RoleNameSource } {
@@ -228,6 +234,16 @@ function keywordsOf(text: string): string[] {
     .filter((match) => match.kind === 'alias')
     .map((match) => match.term)
   return [...new Set(exact)]
+}
+
+/**
+ * 一段文字里属于技术词目录的词。
+ *
+ * **导出**是因为模型比对那条路也要算关键词——界面上「关键词」那一列
+ * 两条路径都从这里出，免得两处各算一套。
+ */
+export function catalogKeywordsOf(text: string): string[] {
+  return keywordsOf(text)
 }
 
 export function parseJd(

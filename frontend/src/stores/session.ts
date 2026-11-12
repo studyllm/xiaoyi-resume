@@ -20,6 +20,12 @@ export const useSessionStore = defineStore('session', () => {
   const status = ref<'unknown' | 'guest' | 'user'>('unknown')
   /** 服务端连不上。不影响已加载的内容，但保存不了。 */
   const offline = ref(false)
+  /**
+   * 这个账号有没有同意把简历内容发给模型供应商。
+   *
+   * **没有就是没同意**——「本次用模型」默认关（`docs/privacy-conclusions.md` §7）。
+   */
+  const modelConsentAt = ref<string | null>(null)
 
   const isLoggedIn = computed(() => user.value !== null)
 
@@ -35,12 +41,14 @@ export const useSessionStore = defineStore('session', () => {
   async function restore(): Promise<void> {
     lastEmail.value = localStorage.getItem('xiaoyi.lastEmail') ?? ''
     try {
-      const result = await api<{ user: User }>('/api/v1/me')
+      const result = await api<{ user: User; modelConsentAt: string | null }>('/api/v1/me')
       user.value = result.user
+      modelConsentAt.value = result.modelConsentAt ?? null
       status.value = 'user'
       offline.value = false
     } catch (error) {
       user.value = null
+      modelConsentAt.value = null
       if (error instanceof ApiError && error.code === 'AUTH_REQUIRED') {
         status.value = 'guest'
         return
@@ -58,15 +66,44 @@ export const useSessionStore = defineStore('session', () => {
     user.value = result.user
     status.value = 'user'
     setLastEmail(email)
+    // 登录后问一次同意状态——老账号在这里才知道自己还没同意过
+    await refreshModelConsent()
   }
-
-  /** 注册。成功不建立登录态——邮箱验证之后才能登录。 */
-  async function register(email: string, password: string): Promise<void> {
+  /**
+   * 注册。
+   *
+   * **同意是注册的前提**（`docs/privacy-conclusions.md` §7）：用户不勾选，
+   * 服务端不建账号。`consent` 由界面传进来。
+   */
+  async function register(email: string, password: string, consent: boolean): Promise<void> {
     await api<{ email: string; verificationRequired: boolean }>('/api/v1/auth/register', {
       method: 'POST',
-      body: { email, password },
+      body: { email, password, consent },
     })
     setLastEmail(email)
+  }
+
+  /** 问服务端这个账号同意没同意过。 */
+  async function refreshModelConsent(): Promise<void> {
+    try {
+      const result = await api<{ modelConsentAt: string | null }>('/api/v1/me')
+      modelConsentAt.value = result.modelConsentAt ?? null
+    } catch {
+      // 问不到就当没同意——宁可少用模型，也不要在没同意的情况下发出去
+      modelConsentAt.value = null
+    }
+  }
+
+  /**
+   * 记下同意。
+   *
+   * 用户在界面上打开「本次用模型」时走这里——**那一刻就是他的点头**。
+   */
+  async function grantModelConsent(): Promise<void> {
+    const result = await api<{ modelConsentAt: string }>('/api/v1/me/model-consent', {
+      method: 'POST',
+    })
+    modelConsentAt.value = result.modelConsentAt
   }
 
   /** 验证邮箱。成功即建立登录态。 */
@@ -101,6 +138,8 @@ export const useSessionStore = defineStore('session', () => {
     const result = await api<{ user: User }>('/api/v1/auth/demo', { method: 'POST' })
     user.value = result.user
     status.value = 'user'
+    // 演示账号里全是假数据，服务端已经记为已同意
+    modelConsentAt.value = new Date().toISOString()
   }
 
   /**
@@ -117,6 +156,7 @@ export const useSessionStore = defineStore('session', () => {
     } finally {
       user.value = null
       status.value = 'guest'
+      modelConsentAt.value = null
     }
   }
 
@@ -129,6 +169,7 @@ export const useSessionStore = defineStore('session', () => {
     } finally {
       user.value = null
       status.value = 'guest'
+      modelConsentAt.value = null
     }
   }
 
@@ -137,6 +178,7 @@ export const useSessionStore = defineStore('session', () => {
     lastEmail,
     status,
     offline,
+    modelConsentAt,
     isLoggedIn,
     currentUserId,
     restore,
@@ -146,6 +188,8 @@ export const useSessionStore = defineStore('session', () => {
     requestPasswordReset,
     confirmPasswordReset,
     loginAsDemo,
+    refreshModelConsent,
+    grantModelConsent,
     logout,
     logoutAll,
   }

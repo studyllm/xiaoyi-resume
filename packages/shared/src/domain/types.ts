@@ -329,6 +329,15 @@ export interface ResumeVersion {
   diff: DiffEntry[]
   uncovered: UncoveredRequirement[]
   coverage: RequirementCoverage[]
+  /**
+   * 覆盖清单是谁算的。
+   *
+   * `'llm'` 是模型逐条比对得出的，`'rules'` 是关键词目录匹配的。
+   * 老版本没有这个字段，按 `'rules'` 看。
+   */
+  coverageEngine?: 'rules' | 'llm'
+  /** 覆盖判断这次没有完全用上模型的原因。 */
+  coverageDegradeReason?: string | null
   integrity: IntegrityReport
   /** 版本自带的审计线索。模型生成的版本带，规则生成的版本不带。 */
   trace?: VersionTrace | null

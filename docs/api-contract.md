@@ -104,7 +104,7 @@
 | `POST /api/v1/draft/import-local` | 登录 | 否（带 `Idempotency-Key`） | 迁移本地存量数据 |
 | `POST /api/v1/diagnosis` | 登录 | 否 | 对已保存的底稿跑诊断 |
 | `DELETE /api/v1/diagnosis` | 登录 | 是 | 清空诊断结果 |
-| `POST /api/v1/jd/analyze` | 登录 | 否 | 解析 JD 并算覆盖 |
+| `POST /api/v1/jd/analyze` | 登录 | 否 | 比对 JD 与简历，给出要求与命中情况。跑在**已保存的简历**上；同一把键只算一次 |
 | `GET /api/v1/versions` | 登录 | 是 | 版本列表（分页） |
 | `POST /api/v1/versions` | 登录 | 否（带 `Idempotency-Key`） | 生成版本 |
 | `GET /api/v1/versions/:id` | 登录 | 是 | 版本详情 |
@@ -112,6 +112,8 @@
 | `GET /api/v1/versions/:id/body` | 登录 | 是 | 版本正文（`format=text\|markdown`） |
 | `GET /api/v1/healthz` | 公开 | 是 | 健康检查 |
 | `GET /api/v1/engine` | 公开 | 是 | 服务端有没有配模型供应商。前端据此决定「本次用模型」那个开关显不显示 |
+| `GET /api/v1/me` | 登录 | 是 | 当前账号。响应里带 `modelConsentAt`（这个账号有没有同意把简历内容发给模型供应商） |
+| `POST /api/v1/me/model-consent` | 登录 | 是 | 补记同意。老账号在界面上打开「本次用模型」时走这里——**那一刻就是他的点头** |
 
 **没有上传端点。** PDF 在浏览器里解析完，只把**提取出的文本**发给服务端——这是 P1 对用户的承诺（「文件在浏览器里解析，不会上传到任何服务器」），服务端因此不需要文件相关的端点与错误码。
 
@@ -199,11 +201,30 @@ POST /api/v1/diagnosis
 
 ```http
 POST /api/v1/jd/analyze
-{ "jdText": "…" }
-→ 200 { "roleName": "前端工程师", "roleNameSource": "extracted", "warnings": [], "coverage": [ { "text": "…", "tier": "strong", "keywords": ["Vue"], "approximate": false } ] }
+{ "jdText": "…", "options": { "useLlm": true } }
+→ 200 {
+  "analysisId": "an_…",
+  "roleName": "前端工程师",
+  "roleNameSource": "first-line",
+  "requirements": [ { "id": "req_1", "text": "熟悉 Vue 与 TypeScript", "keywords": ["Vue"] } ],
+  "coverage": [ { "requirementId": "req_1", "text": "熟悉 Vue 与 TypeScript", "tier": "strong", "keywords": ["Vue"], "approximate": false, "reason": null, "matchedBulletIds": ["bullet_3"] } ],
+  "warnings": [],
+  "engine": "llm",
+  "degraded": false,
+  "degradeReason": null
+}
 ```
 
 解析与覆盖算在一次调用里——前端不需要先拿 JD 再算覆盖，多一次往返没有意义。
+
+- **跑在已保存的简历上**：前端要先存后分析，比对的就是服务端那份。
+- `roleNameSource` 取 `domain/types.ts` 里 `RoleNameSource` 的合法值：`explicit` / `pattern` / `first-line` / `phrase` / `fallback`。**岗位名不由模型给**——它由规则引擎出，模型只负责「抽要求 + 判命中」。
+- `options.useLlm`：**一次性开关**（`docs/privacy-conclusions.md` §5.1）。**默认 `false`**——要发就得用户点头。`false` 时全程走关键词目录匹配，**简历不发给任何第三方**。
+- **服务端自己查账号级同意**，不信客户端传来的开关：`useLlm: true` 但账号没同意过（`model_consent_at` 为空）时，**这次仍然走规则目录**。一个改过的客户端不能靠发这个字段就把简历发出去。
+- `engine` 是 `'llm'` 时这次比对是模型逐条比对得出的；`'rules'` 是关键词目录匹配的。
+- `degraded` 为真表示这次没有完全用上模型（模型超时、返回坏 JSON、没配供应商），`degradeReason` 说清具体原因。界面据此说明「本次按关键词匹配得到，命中情况仅供参考」。
+- `matchedBulletIds` 是命中的要点 id——前端拿它映射出简历里的要点原文，让用户能核对。
+- **模型给的每一条都要核对**：要求必须能在 JD 原文中找到，命中的要点必须真实存在，序号越界的引用丢掉，「强覆盖」必须有结果信号。核对不上的不采用。
 
 ```http
 POST /api/v1/versions
@@ -212,12 +233,14 @@ POST /api/v1/versions
   "name": "美团 前端工程师",
   "options": { "allowVerbFronting": true, "dropIrrelevantProjects": true, "useLlm": false }
 }
-→ 201 { "version": { "id": "ver_…", "name": "…", "integrity": { "checked": 42, "violations": [], "generator": "rules", "reverted": 0, "degraded": false, "observations": [] }, "uncovered": [ … ] } }
+→ 201 { "version": { "id": "ver_…", "name": "…", "integrity": { "checked": 42, "violations": [], "generator": "rules", "reverted": 0, "degraded": false, "observations": [] }, "coverageEngine": "llm", "coverageDegradeReason": null, "uncovered": [ … ] } }
 ```
 
 - `options.useLlm`：**一次性开关**（`docs/privacy-conclusions.md` §5.1）。**默认 `false`**——要发就得用户点头。`false` 时全程走规则引擎，**简历正文不发给任何第三方**。界面上那个开关由 `GET /api/v1/engine` 决定显不显示：服务端没配供应商时不显示——按了没反应比不显示更让人困惑。
+- **服务端自己查账号级同意**（`model_consent_at`），不信客户端传来的开关：没同意过的账号即使传 `useLlm: true`，这次也走规则引擎。
 - 响应里的 `integrity` 用 ADR-0003 的新形状（`generator` / `reverted` / `degraded` / `observations` / `violations[].kind`）。
 - `generator` 是 `llm` 时，这一版的正文里有模型写的要点；`degraded` 为真表示这次生成没有完全用上模型。
+- `coverageEngine` 与 `coverageDegradeReason` 说明**覆盖清单**是谁算的：`'llm'` 是模型逐条比对，`'rules'` 是关键词目录匹配。老版本没有这两个字段，按 `'rules'` 看。
 - 生成可能耗时（P4 接模型后十秒级），客户端超时设 **30 秒**，超时后按「离线/超时」降级提示，**不重复提交**（靠 `Idempotency-Key`）。
 
 ```http
@@ -292,7 +315,8 @@ GET /api/v1/versions/:id/body?format=markdown
 | `POST /api/v1/auth/register` | **不幂等**（要发邮件） | 带 `Idempotency-Key`；同键重复请求不重发邮件、不重发确认 |
 | `POST /api/v1/auth/login` | 不幂等 | 带 `Idempotency-Key`：同键不重复建会话 |
 | `POST /api/v1/auth/password-reset` | 不幂等 | **不**用幂等键——用户要能重发。只靠限流 |
-| `POST /api/v1/draft/parse`、`/jd/analyze`、`/diagnosis` | 无副作用 | 不需要幂等键 |
+| `POST /api/v1/draft/parse`、`/diagnosis` | 无副作用 | 不需要幂等键 |
+| `POST /api/v1/jd/analyze` | **同输入天然幂等** | 不需要幂等键：**同一把键**（用户、简历修订号、JD 哈希、模式）只算一次，重复请求直接返回第一次的结果，**不重复调模型、不重复计费**（ADR-0005 §3「同输入缓存」） |
 | `POST /api/v1/draft/import-local` | **不幂等**（要搬数据） | 带 `Idempotency-Key`：同键不重复迁移 |
 
 **`Idempotency-Key` 的语义**：客户端生成一个 UUID，服务端记住 **24 小时**。同一个键的重复请求返回**第一次的结果**，不再执行副作用。
@@ -352,12 +376,15 @@ GET /api/v1/versions?page=1&pageSize=20
 | --- | --- | --- |
 | `parseDraft` | `POST /api/v1/draft/parse` | `422 PARSE_FAILED` |
 | `diagnose` | `POST /api/v1/diagnosis` | `500 INTERNAL_ERROR`（诊断失败不该让用户重填简历） |
-| `parseJd` + `evaluateJd` | `POST /api/v1/jd/analyze` | `422 JD_PARSE_FAILED` |
+| `parseJd` + `evaluateJd`（规则目录匹配） | `POST /api/v1/jd/analyze` | `422 JD_PARSE_FAILED` |
+| `analyzeJd`（模型比对） | `POST /api/v1/jd/analyze` | `422 JD_PARSE_FAILED`；模型不可用 → **回落规则目录**并标 `degraded`，**不是错误** |
 | `generateVersion` | `POST /api/v1/versions` | `422 GENERATION_FAILED`；模型不可用且回落失败 → `503 LLM_UNAVAILABLE` |
 
 **降级链**（ADR-0005 §2）：LLM 输出没通过校验 → 回落到规则引擎产出 → 版本标记降级。**降级不是错误**，返回 `201` 而不是 `503`。
 
 「模型不可用」与「模型输出不合格」是两回事：前者回落，后者也回落，但版本上的 `integrity.generator` 分别是 `rules` 与 `llm`。
+
+**JD 比对抽不出要求不是失败**：模型（或规则）一条要求都没抽出来时，返回 `200` + 空要求列表 + 一条 warning，界面展示空状态并给出继续的入口——**不返回 422**（`jd-version-generation` 规格：「展示一个空状态说明原因，而不是把它当成解析失败」）。
 
 ---
 

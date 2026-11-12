@@ -1,4 +1,5 @@
 import { rulesGenerator } from '@xiaoyi/shared/engines/generator'
+import { rulesJdAnalyzer } from '@xiaoyi/shared/engines/jdAnalysis'
 
 import { describe, expect, it } from 'vitest'
 
@@ -14,6 +15,7 @@ function harness() {
   const store = createMemoryStore()
   const app = buildApp({
     generator: rulesGenerator,
+    analyzer: rulesJdAnalyzer,
     llm: null,
     store,
     idempotency: createMemoryIdempotencyStore(),
@@ -29,7 +31,7 @@ async function login(h: ReturnType<typeof harness>): Promise<string> {
   await h.app.inject({
     method: 'POST',
     url: '/api/v1/auth/register',
-    payload: { email: 'someone@example.com', password: PASSWORD },
+    payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
   })
   const token = /token=([^\s&]+)/.exec(h.mailer.sent[0]!.text)![1]!
   await h.app.inject({

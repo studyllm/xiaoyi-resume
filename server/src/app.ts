@@ -2,6 +2,7 @@ import cookie from '@fastify/cookie'
 import Fastify, { type FastifyInstance, type FastifyLoggerOptions } from 'fastify'
 
 import type { ResumeGenerator } from '@xiaoyi/shared/engines/generator'
+import type { JdAnalyzer } from '@xiaoyi/shared/engines/types'
 
 import type { MailSender } from './auth/mailer'
 import type { IdempotencyStore } from './db/idempotency'
@@ -11,6 +12,7 @@ import { registerAuthRoutes } from './routes/auth'
 import { registerEngineRoutes } from './routes/engine'
 import { registerHealthz } from './routes/healthz'
 import { registerImportRoutes } from './routes/import'
+import { registerJdRoutes } from './routes/jd'
 import { registerParse } from './routes/parse'
 import { registerResumeRoutes } from './routes/resume'
 
@@ -35,6 +37,11 @@ export interface AppDeps {
    * 路由不关心用的是哪个。
    */
   generator: ResumeGenerator
+  /**
+   * JD 比对的端口。规则引擎与模型是同一个接口的两个实现（ADR-0005 §2）——
+   * 路由不关心用的是哪个。
+   */
+  analyzer: JdAnalyzer
   /** 配了模型供应商就给出模型 id，没配就是 null。 */
   llm: { model: string } | null
 }
@@ -83,10 +90,12 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerAuthRoutes(app, deps)
   registerImportRoutes(app, { store: deps.store })
   registerEngineRoutes(app, { llm: deps.llm })
+  registerJdRoutes(app, { store: deps.store, analyzer: deps.analyzer })
   registerResumeRoutes(app, {
     store: deps.store,
     idempotency: deps.idempotency,
     generator: deps.generator,
+    analyzer: deps.analyzer,
   })
 
   return app

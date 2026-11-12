@@ -320,6 +320,10 @@ export const WARNING_STATES = defineStates({
     title: '这份 PDF 能读到的文字很少',
     hint: '可能是扫描件或图片页。下面是读到的部分，请核对后再保存。',
   },
+  'jd-keyword-match': {
+    title: '本次按关键词匹配得到，命中情况仅供参考',
+    hint: '{value}。这次没有逐条比对，命中与未命中都可能有出入。',
+  },
   'unrecognized-sections': {
     title: '这份简历有 {value} 段我们不确定属于哪个分区，放在「其它」里了',
     hint: '下面这几段没能归到教育、经历、项目、技能任何一个分区，可以在纸上直接改。',
@@ -348,6 +352,14 @@ export const STATUS_STATES = defineStates({
   'generating-with-rules': {
     title: '正在生成',
     hint: '正在按规则引擎重组你的简历，通常几秒就好。',
+  },
+  'analyzing-with-model': {
+    title: '正在比对 JD 与你的简历',
+    hint: '已等待 {value} 秒。模型要逐条判断这份 JD 的要求你有没有覆盖，通常十几秒到一两分钟。',
+  },
+  'analyzing-with-rules': {
+    title: '正在按关键词匹配',
+    hint: '正在把 JD 里的要求与你简历里的词对上，通常几秒就好。',
   },
   'draft-dirty': {
     title: '简历有未保存的修改',
