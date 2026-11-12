@@ -5,7 +5,7 @@ import { CopyDocument, Download } from '@element-plus/icons-vue'
 
 import EmptyState from '@/components/EmptyState.vue'
 import ResumePreview from '@/components/ResumePreview.vue'
-import type { DiffEntry, ResumeVersion, SectionKind } from '@xiaoyi/shared/domain/types'
+import type { DiffEntry, RequirementCoverage, ResumeVersion, SectionKind } from '@xiaoyi/shared/domain/types'
 import { renderMarkdown } from '@xiaoyi/shared/engines/markdown'
 import { FAILURE_STATES, stateHint, stateMessage, stateTitle } from '@xiaoyi/shared/domain/states'
 import { useDraftStore } from '@/stores/draft'
@@ -38,6 +38,25 @@ const paperSections = computed(() =>
 
 const coverage = computed(() => version.value?.coverage ?? [])
 const profile = computed(() => version.value?.profile ?? { name: '', headline: '', contacts: [] })
+
+/**
+ * 命中的要点原文。
+ *
+ * **从版本自己的正文里找**——版本是快照，它带的就是当时那批要点。
+ */
+function matchedTextsOf(row: RequirementCoverage): string[] {
+  const current = version.value
+  if (!current) return []
+  const texts: string[] = []
+  for (const section of current.sections) {
+    for (const item of section.items) {
+      for (const bullet of item.bullets) {
+        if (row.matchedBulletIds.includes(bullet.id)) texts.push(bullet.text)
+      }
+    }
+  }
+  return texts
+}
 
 interface DiffGroup {
   sectionKind: SectionKind
@@ -105,6 +124,22 @@ const generatorNotice = computed(() => {
     return '本版本由模型生成，模型写的每一条断言都经过事实校验，没有通过的都换回了规则引擎的产出'
   }
   return '本版本由本地规则引擎生成，不是真实模型输出'
+})
+
+/**
+ * 覆盖清单是谁算的。
+ *
+ * **老版本没有这个字段**，按规则目录看——那时的覆盖确实是关键词匹配出来的。
+ */
+const coverageNotice = computed(() => {
+  const engine = version.value?.coverageEngine ?? 'rules'
+  const reason = version.value?.coverageDegradeReason
+  if (engine === 'llm') {
+    return '这份要求覆盖由模型逐条比对你的简历得出，模型给的每一条要求都核对过 JD 原文'
+  }
+  return reason
+    ? `这份要求覆盖按关键词目录匹配得出（${reason}），仅供参考`
+    : '这份要求覆盖按关键词目录匹配得出，仅供参考'
 })
 
 const integrityAlertType = computed<'success' | 'warning'>(() => {
@@ -215,6 +250,7 @@ async function exportPdf(): Promise<void> {
           这一版只对你简历中已有的事实做重组、删减与措辞规范化，未新增任何公司、项目、职责或数字；
           共 {{ version.uncovered.length }} 项 JD 要求在你的简历中没有对应事实，已在「未覆盖要求」中列出。
         </p>
+        <p class="description">{{ coverageNotice }}</p>
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="对应岗位">{{ version.jdRoleName }}</el-descriptions-item>
           <el-descriptions-item label="生成时的简历修订号">{{ version.draftRevision }}</el-descriptions-item>
@@ -241,12 +277,20 @@ async function exportPdf(): Promise<void> {
 
         <el-tab-pane :label="`要求覆盖（${coverage.length}）`" name="coverage">
           <el-table :data="coverage" size="small">
-            <el-table-column label="JD 原句" min-width="300">
+            <el-table-column label="JD 原句" min-width="280">
               <template #default="{ row }">{{ row.text }}</template>
             </el-table-column>
-            <el-table-column label="关键词" width="160">
+            <el-table-column label="关键词" width="140">
               <template #default="{ row }">
                 <span class="text-muted">{{ row.keywords.join('、') || '无关键词' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="命中依据" min-width="220">
+              <template #default="{ row }">
+                <span v-if="matchedTextsOf(row as RequirementCoverage).length > 0" class="text-muted">
+                  {{ matchedTextsOf(row as RequirementCoverage).join('；') }}
+                </span>
+                <span v-else class="text-muted">简历里没有对应的事实</span>
               </template>
             </el-table-column>
             <el-table-column label="覆盖程度" width="190">

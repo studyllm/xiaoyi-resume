@@ -1,4 +1,5 @@
 import { rulesGenerator } from '@xiaoyi/shared/engines/generator'
+import { rulesJdAnalyzer } from '@xiaoyi/shared/engines/jdAnalysis'
 import { Writable } from 'node:stream'
 
 import { describe, expect, it } from 'vitest'
@@ -26,6 +27,7 @@ function harness(
   const store = createMemoryStore()
   const app = buildApp({
     generator: rulesGenerator,
+    analyzer: rulesJdAnalyzer,
     llm: null,
     store,
     idempotency: createMemoryIdempotencyStore(),
@@ -108,7 +110,7 @@ async function registerAndVerify(h: Harness): Promise<void> {
   await h.app.inject({
     method: 'POST',
     url: '/api/v1/auth/register',
-    payload: { email: 'someone@example.com', password: PASSWORD },
+    payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
   })
   await h.app.inject({
     method: 'POST',
@@ -124,7 +126,7 @@ describe('注册与验证', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
+      payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
     })
 
     expect(response.statusCode).toBe(201)
@@ -140,7 +142,7 @@ describe('注册与验证', () => {
 
   it('邮箱已注册时给出可执行的下一步', async () => {
     const { app } = harness()
-    const payload = { email: 'someone@example.com', password: PASSWORD }
+    const payload = { email: 'someone@example.com', password: PASSWORD, consent: true }
 
     await app.inject({ method: 'POST', url: '/api/v1/auth/register', payload })
     const again = await app.inject({ method: 'POST', url: '/api/v1/auth/register', payload })
@@ -155,7 +157,7 @@ describe('注册与验证', () => {
     await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
+      payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
     })
 
     const response = await app.inject({
@@ -174,7 +176,7 @@ describe('注册与验证', () => {
     await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
+      payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
     })
     const token = tokenFromMail(mailer)
 
@@ -214,7 +216,7 @@ describe('登录', () => {
     await h.app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
+      payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
     })
 
     const response = await h.app.inject({
@@ -269,7 +271,7 @@ describe('登出', () => {
     await h.app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
+      payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
     })
     await h.app.inject({
       method: 'POST',
@@ -301,7 +303,7 @@ describe('登出', () => {
     await h.app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
+      payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
     })
     await h.app.inject({
       method: 'POST',
@@ -354,7 +356,7 @@ describe('找回密码', () => {
     await h.app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
+      payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
     })
     await h.app.inject({
       method: 'POST',
@@ -416,7 +418,7 @@ describe('发信失败', () => {
     const response = await h.app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
+      payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
     })
 
     expect(response.statusCode).toBe(502)
@@ -439,7 +441,7 @@ describe('发信失败', () => {
     await h.app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
+      payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
     })
 
     const log = lines.join('')
@@ -459,7 +461,7 @@ describe('发信失败', () => {
     await h.app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
+      payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
     })
 
     expect(await h.store.findUserByEmail('someone@example.com')).toBeNull()
@@ -474,7 +476,7 @@ describe('发信失败', () => {
     await h.app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { email: 'someone@example.com', password: PASSWORD },
+      payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
     })
 
     const token = /token=([^\s&]+)/.exec(h.mailer.sent[0]!.text)![1]!

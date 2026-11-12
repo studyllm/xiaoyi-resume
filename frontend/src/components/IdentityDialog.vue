@@ -24,6 +24,13 @@ const password = ref('')
 const error = ref('')
 const notice = ref('')
 const busy = ref(false)
+/**
+ * 同意把简历内容发给模型供应商。
+ *
+ * **注册时单独勾这一项**（`docs/privacy-conclusions.md` §7）——它是「要发就得
+ * 用户点头」的那一下，不勾就不能完成注册。
+ */
+const consent = ref(false)
 
 const COPY = {
   login: { title: '登录', submit: '登录', hint: '登录之后就能保存简历、生成版本。' },
@@ -42,6 +49,7 @@ watch(
     password.value = ''
     error.value = ''
     notice.value = ''
+    consent.value = false
   },
 )
 
@@ -67,7 +75,13 @@ async function submit(): Promise<void> {
       return
     }
     if (mode.value === 'register') {
-      await session.register(email.value, password.value)
+      // 同意是注册的前提——不勾，服务端不会建这个账号
+      if (!consent.value) {
+        error.value = '需要勾选上面的同意项才能注册。'
+        busy.value = false
+        return
+      }
+      await session.register(email.value, password.value, consent.value)
       notice.value = '验证邮件已发出，去查收一下点开链接就能登录。'
       busy.value = false
       return
@@ -110,6 +124,14 @@ async function submit(): Promise<void> {
       </el-form-item>
       <el-form-item v-if="error" :error="error" />
       <el-form-item v-if="notice" class="identity-notice">{{ notice }}</el-form-item>
+      <el-form-item v-if="mode === 'register'">
+        <el-checkbox v-model="consent">
+          我同意把我的简历内容发给境内模型供应商，用于比对 JD 与生成版本
+        </el-checkbox>
+        <p class="identity-hint">
+          只会发简历里的分区、条目与要点正文，以及你粘贴的这份 JD。姓名、抬头与联系方式不会发出去。
+        </p>
+      </el-form-item>
     </el-form>
 
     <p class="identity-hint">{{ copy.hint }}</p>

@@ -1,4 +1,5 @@
 import { rulesGenerator, createLlmGenerator } from '@xiaoyi/shared/engines/generator'
+import { createLlmJdAnalyzer, rulesJdAnalyzer } from '@xiaoyi/shared/engines/jdAnalysis'
 import { fileURLToPath } from 'node:url'
 
 import { buildApp } from './app'
@@ -44,6 +45,15 @@ const generator = llm
     })
   : rulesGenerator
 
+// JD 比对同理：同一个端口的两个实现。
+const analyzer = llm
+  ? createLlmJdAnalyzer({
+      chat: createOpenAiChat(llm),
+      model: llm.model,
+      maxTokens: llm.maxTokens,
+    })
+  : rulesJdAnalyzer
+
 const smtpConfig = {
   host: required('SMTP_HOST'),
   port: Number(process.env.SMTP_PORT ?? 465),
@@ -85,6 +95,7 @@ if (smtpCheck.ok) {
 const app = buildApp({
   store: createPostgresStore(database),
   generator,
+  analyzer,
   llm: llm ? { model: llm.model } : null,
   idempotency: createMemoryIdempotencyStore(),
   mailer,

@@ -18,6 +18,12 @@ export const users = pgTable(
     passwordHash: text('password_hash').notNull(),
     /** 邮箱验证通过的时刻。没验证的账号不能登录，也不能保存。 */
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+    /**
+     * 同意把简历内容发给模型供应商的时刻。
+     *
+     * **没有这一列就是没有同意**——老账号默认不发（`docs/privacy-conclusions.md` §7）。
+     */
+    modelConsentAt: timestamp('model_consent_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   // 邮箱是登录标识，必须唯一
@@ -130,6 +136,50 @@ export const generations = pgTable(
   (table) => [index('generations_user_idx').on(table.userId, table.createdAt)],
 )
 
+/**
+ * JD 比对结果。
+ *
+ * **同一把键上只算一次**（ADR-0005 §3「同输入缓存」）：键是
+ * （用户、简历修订号、JD 哈希、模式）。第二步看到的与版本详情里的是同一份，
+ * 同一把键不会重复调模型、不重复计费。
+ *
+ * **不含简历正文**：payload 里是 JD 的要求与命中结论，正文仍在 `drafts` 里。
+ */
+export const jdAnalyses = pgTable(
+  'jd_analyses',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** 分析时的简历修订号。改了简历就是另一次分析。 */
+    draftRevision: integer('draft_revision').notNull(),
+    /** JD 的哈希，用来判断是不是同一份 JD。 */
+    jdHash: text('jd_hash').notNull(),
+    /** 'llm'（模型比对）或 'rules'（关键词目录匹配）。 */
+    mode: text('mode').notNull(),
+    /** 模型 id。没配供应商或走规则目录时为空。 */
+    model: text('model'),
+    /** 提示词版本。变了就换号，用来区分两批输出。 */
+    promptVersion: text('prompt_version'),
+    /** ok / degraded（回落了规则目录）/ error（模型不可用）。 */
+    status: text('status').notNull(),
+    promptTokens: integer('prompt_tokens').notNull().default(0),
+    completionTokens: integer('completion_tokens').notNull().default(0),
+    /** 这次没有完全用上模型的原因。 */
+    degradeReason: text('degrade_reason'),
+    /** 分析结果：要求、分档、要点关联、警告。 */
+    payload: jsonb('payload').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    // 同一把键只算一次
+    uniqueIndex('jd_analyses_key_idx').on(table.userId, table.draftRevision, table.jdHash, table.mode),
+    index('jd_analyses_user_idx').on(table.userId, table.createdAt),
+  ],
+)
+
 export type UserRow = typeof users.$inferSelect
 export type SessionRow = typeof sessions.$inferSelect
 export type VerificationTokenRow = typeof verificationTokens.$inferSelect
+export type JdAnalysisRow = typeof jdAnalyses.$inferSelect

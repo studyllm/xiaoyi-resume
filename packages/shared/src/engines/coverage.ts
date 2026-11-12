@@ -1,27 +1,13 @@
-import type { Draft, Jd, SectionKind } from '../domain/types'
+import type { Draft, Jd } from '../domain/types'
 import { findEntryByTerm, matchCatalog } from './catalog'
 import { extractCorePhrases } from './jd'
 import { hasResultSignal } from './signals'
 import { containsTerm } from './textUtils'
-import type { CoverageTier, RequirementCoverage, UncoveredReason } from './types'
+import type { BulletEvidence, CoverageTier, RequirementCoverage, UncoveredReason } from './types'
 
 const PLANNED_MARKERS = ['计划', '预计', '后续', '将要', '准备', '规划', '拟', '立项', '将在', '即将']
 
-export interface BulletEvidence {
-  bulletId: string
-  text: string
-  sectionId: string
-  sectionKind: SectionKind
-  itemId: string
-  draftIndex: number
-  relevance: number
-  hasResult: boolean
-  planned: boolean
-  exactTerms: Set<string>
-  relatedByEntry: Map<string, Set<string>>
-  approxRequirements: Set<string>
-  jdRelated: boolean
-}
+export type { BulletEvidence }
 
 export function isPlanned(text: string): boolean {
   return PLANNED_MARKERS.some((marker) => text.includes(marker))

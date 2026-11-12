@@ -91,7 +91,6 @@ export const rulesGenerator: ResumeGenerator = {
     }
   },
 }
-
 // ---------------------------------------------------------------- 模型
 
 export interface ChatMessage {

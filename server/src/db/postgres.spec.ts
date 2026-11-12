@@ -2,6 +2,7 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Pool } from 'pg'
 import { randomUUID } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { startEmbeddedPostgres } from './embeddedPostgres'
@@ -58,7 +59,9 @@ beforeAll(async () => {
   pool = new Pool({ connectionString: embedded.connectionString })
   const database = drizzle(pool, { schema })
   await migrate(database, {
-    migrationsFolder: new URL('./migrations', import.meta.url).pathname,
+    // **用 `fileURLToPath` 而不是 `URL.pathname`**——后者在 Windows 上给出
+    // `/D:/...`，拼出来的路径解析不出来，迁移直接找不到文件。
+    migrationsFolder: fileURLToPath(new URL('./migrations', import.meta.url)),
   })
   store = createPostgresStore(database)
 }, 180000)

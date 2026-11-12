@@ -3,6 +3,7 @@ import {
   rulesGenerator,
   type ResumeGenerator,
 } from '@xiaoyi/shared/engines/generator'
+import { rulesJdAnalyzer } from '@xiaoyi/shared/engines/jdAnalysis'
 
 import { describe, expect, it } from 'vitest'
 
@@ -72,6 +73,7 @@ function harness(generator: ResumeGenerator = rulesGenerator) {
   const app = buildApp({
     llm: null,
     generator,
+    analyzer: rulesJdAnalyzer,
     store,
     idempotency: createMemoryIdempotencyStore(),
     mailer,
@@ -85,7 +87,7 @@ async function login(h: ReturnType<typeof harness>): Promise<string> {
   await h.app.inject({
     method: 'POST',
     url: '/api/v1/auth/register',
-    payload: { email: 'someone@example.com', password: PASSWORD },
+    payload: { email: 'someone@example.com', password: PASSWORD, consent: true },
   })
   const token = /token=([^\s&]+)/.exec(h.mailer.sent[0]!.text)![1]!
   await h.app.inject({

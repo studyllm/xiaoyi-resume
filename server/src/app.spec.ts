@@ -4,6 +4,7 @@ import { createIdSeed } from '@xiaoyi/shared/domain/ids'
 import { parseDraft } from '@xiaoyi/shared/engines/parseDraft'
 import { createMemoryMailer } from './auth/mailer'
 import { rulesGenerator } from '@xiaoyi/shared/engines/generator'
+import { rulesJdAnalyzer } from '@xiaoyi/shared/engines/jdAnalysis'
 
 import { buildApp } from './app'
 import { createMemoryIdempotencyStore } from './db/idempotency'
@@ -13,6 +14,7 @@ import { createMemoryStore } from './db/store'
 function testApp() {
   return buildApp({
     generator: rulesGenerator,
+    analyzer: rulesJdAnalyzer,
     llm: null,
     store: createMemoryStore(),
     idempotency: createMemoryIdempotencyStore(),
@@ -102,6 +104,7 @@ describe('可观测', () => {
   it('响应里带请求 id，用户报错时能报给我们', async () => {
     const app = buildApp({
     generator: rulesGenerator,
+    analyzer: rulesJdAnalyzer,
     llm: null,
       store: createMemoryStore(),
       mailer: createMemoryMailer(),
@@ -118,6 +121,7 @@ describe('可观测', () => {
   it('客户端带了请求 id 就用它，方便跨服务追踪', async () => {
     const app = buildApp({
     generator: rulesGenerator,
+    analyzer: rulesJdAnalyzer,
     llm: null,
       store: createMemoryStore(),
       mailer: createMemoryMailer(),
@@ -140,6 +144,7 @@ describe('引擎状态', () => {
   it('没配供应商时说没有模型', async () => {
     const app = buildApp({
       generator: rulesGenerator,
+      analyzer: rulesJdAnalyzer,
       llm: null,
       store: createMemoryStore(),
       idempotency: createMemoryIdempotencyStore(),
@@ -156,6 +161,7 @@ describe('引擎状态', () => {
   it('配了供应商时说有模型，但不回模型 id', async () => {
     const app = buildApp({
       generator: rulesGenerator,
+      analyzer: rulesJdAnalyzer,
       llm: { model: 'test-model' },
       store: createMemoryStore(),
       idempotency: createMemoryIdempotencyStore(),

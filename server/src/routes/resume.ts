@@ -5,11 +5,14 @@ import type { FastifyInstance } from 'fastify'
 import type { Draft } from '@xiaoyi/shared/domain/types'
 import { createIdSeed } from '@xiaoyi/shared/domain/ids'
 import type { ResumeGenerator } from '@xiaoyi/shared/engines/generator'
+import { fromStoredAnalysis } from '@xiaoyi/shared/engines/jdAnalysis'
+import type { JdAnalyzer } from '@xiaoyi/shared/engines/types'
 
 import { currentUser } from '../auth/session'
 import type { IdempotencyStore } from '../db/idempotency'
 import type { Store } from '../db/store'
 import { sendError } from '../http/errors'
+import { mayUseModel, resolveAnalysis } from './jd'
 
 const MAX_PAGE_SIZE = 100
 const DEFAULT_PAGE_SIZE = 20
@@ -33,9 +36,15 @@ const versionIdSeed = createIdSeed(Date.now())
 
 export function registerResumeRoutes(
   app: FastifyInstance,
-  deps: { store: Store; idempotency: IdempotencyStore; generator: ResumeGenerator },
+  deps: {
+    store: Store
+    idempotency: IdempotencyStore
+    generator: ResumeGenerator
+    /** JD 比对的端口。版本生成复用它算出的那一份分析。 */
+    analyzer: JdAnalyzer
+  },
 ): void {
-  const { store, idempotency, generator } = deps
+  const { store, idempotency, generator, analyzer } = deps
 
   async function requireUser(request: Parameters<typeof currentUser>[1]) {
     const user = await currentUser(store, request)
@@ -111,6 +120,26 @@ export function registerResumeRoutes(
     if (!draftRow) return sendError(reply, 'RESUME_NOT_FOUND')
 
     const existing = await store.listVersions(user.id)
+    // **同意是账号级的，服务端自己查**——不信客户端传来的开关
+    const useLlm = await mayUseModel(store, user.id, body.options?.useLlm === true)
+
+    /**
+     * 用同一份分析。
+     *
+     * **键是（用户、简历修订号、JD 哈希、模式）**——第二步算过一次的话，
+     * 这里直接复用，不重复调模型、不重复计费。用户没点过「解析 JD」就
+     * 直接生成版本的话，这里现算一份。
+     */
+    const analysisRow = await resolveAnalysis(
+      store,
+      analyzer,
+      user.id,
+      draftRow.payload,
+      draftRow.revision,
+      body.jdText,
+      useLlm,
+    )
+
     const result = await generator.generate(
       draftRow.payload,
       body.jdText,
@@ -120,7 +149,8 @@ export function registerResumeRoutes(
         existingVersionCount: existing.length,
         allowVerbFronting: body.options?.allowVerbFronting ?? true,
         dropIrrelevantProjects: body.options?.dropIrrelevantProjects ?? true,
-        useLlm: body.options?.useLlm === true,
+        useLlm,
+        analysis: fromStoredAnalysis(analysisRow.payload),
       },
       versionIdSeed,
     )

@@ -7,6 +7,7 @@ import type {
   Jd,
   RequirementCoverage,
   ResumeVersion,
+  SectionKind,
   UncoveredReason,
 } from '../domain/types'
 
@@ -53,9 +54,119 @@ export interface GenerateOptions {
    * **默认不用**——简历正文发给第三方要用户自己点头（`docs/privacy-conclusions.md` §5.1）。
    */
   useLlm?: boolean
+  /**
+   * 已经算好的 JD 分析结果。
+   *
+   * **给了就用它，没给就自己算**（规则路径）。分析结果来自 `JdAnalyzer`——
+   * 模型路径下它带着模型抽的要求与逐条判定，规则路径下它就是今天的
+   * `parseJd` + `evaluateJd`。版本里的覆盖与未覆盖清单用它，
+   * 所以第二步看到的与版本详情里的是同一份。
+   */
+  analysis?: JdAnalysis | null
 }
 
 export type { CoverageTier, RequirementCoverage, UncoveredReason }
+
+/**
+ * 一条要点与 JD 要求的关系。
+ *
+ * **放在这里**是因为 `coverage.ts` 与 `types.ts` 会互相引用（覆盖要算分档、
+ * 分档要算证据），类型定义得住在两者之外才不构成环。
+ */
+export interface BulletEvidence {
+  bulletId: string
+  text: string
+  sectionId: string
+  sectionKind: SectionKind
+  itemId: string
+  draftIndex: number
+  relevance: number
+  hasResult: boolean
+  planned: boolean
+  exactTerms: Set<string>
+  relatedByEntry: Map<string, Set<string>>
+  approxRequirements: Set<string>
+  jdRelated: boolean
+}
+
+/**
+ * 要点证据的存档形状。
+ *
+ * **`Set` 与 `Map` 存不进 jsonb**——落库前要摊平成数组，取出来再装回去。
+ */
+export interface StoredEvidence {
+  bulletId: string
+  text: string
+  sectionId: string
+  sectionKind: SectionKind
+  itemId: string
+  draftIndex: number
+  relevance: number
+  hasResult: boolean
+  planned: boolean
+  exactTerms: string[]
+  /** 条目 id → 相关的词。 */
+  relatedByEntry: Record<string, string[]>
+  approxRequirements: string[]
+  jdRelated: boolean
+}
+
+/**
+ * 一份 JD 比对的结果。
+ *
+ * **三样东西缺一不可**：`jd` 带着带 id 的要求（未覆盖清单要按 id 回查原文），
+ * `coverage` 是逐条分档，`evidence` 是要点与要求的关联（排序与删减靠它）。
+ */
+export interface JdAnalysis {
+  jd: Jd
+  coverage: RequirementCoverage[]
+  evidence: BulletEvidence[]
+  warnings: string[]
+  /** 谁做的这次比对。 */
+  engine: 'rules' | 'llm'
+  /** 这次没有完全用上模型（模型不可用、回落了规则目录）。 */
+  degraded: boolean
+  /** 没完全用上的原因。界面要能说清「为什么」。 */
+  degradeReason?: string | null
+}
+
+/** 落库的形状：`evidence` 摊平了，其余一样。 */
+export interface StoredJdAnalysisPayload {
+  jd: Jd
+  coverage: RequirementCoverage[]
+  evidence: StoredEvidence[]
+  warnings: string[]
+  engine: 'rules' | 'llm'
+  degraded: boolean
+  degradeReason: string | null
+}
+
+export interface JdAnalysisResult extends JdAnalysis {
+  /** 这次用的模型。没配供应商或走规则目录时为空。 */
+  model: string | null
+  promptVersion: string | null
+  promptTokens: number
+  completionTokens: number
+}
+
+/**
+ * JD 比对的端口。
+ *
+ * 规则引擎与模型是同一个接口的两个实现（ADR-0005 §2）——视图与状态层不感知实现差异。
+ */
+export interface JdAnalyzer {
+  /**
+   * 比对一份 JD 与一份底稿。
+   *
+   * **异步**：模型调用天生是异步的，端口不能假装它是同步的。
+   */
+  analyze(
+    draft: Draft,
+    jdText: string,
+    ctx: EngineContext,
+    options?: { useLlm?: boolean },
+  ): Promise<JdAnalysisResult>
+}
 
 export interface GenerateVersionResult {
   version: ResumeVersion

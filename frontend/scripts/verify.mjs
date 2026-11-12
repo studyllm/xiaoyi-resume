@@ -21,6 +21,10 @@ function run(step) {
       cwd: projectRoot,
       stdio: 'inherit',
       env: process.env,
+      // **Windows 上要 `shell: true`**：Node 18.20 之后不再允许直接 spawn
+      // `.cmd` 文件，没有它会抛 `spawn EINVAL`——门禁根本跑不起来。
+      // 参数是这里写死的脚本名，不存在注入面。
+      shell: process.platform === 'win32',
     })
     child.on('error', (error) => {
       console.error(`✗ ${step.name} 无法启动：${error.message}`)

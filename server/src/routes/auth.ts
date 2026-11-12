@@ -47,12 +47,17 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps): void {
   const mailConfig = { siteUrl: deps.siteUrl, from: deps.from }
 
   app.post('/api/v1/auth/register', async (request, reply) => {
-    const body = request.body as { email?: unknown; password?: unknown }
+    const body = request.body as { email?: unknown; password?: unknown; consent?: unknown }
 
     if (typeof body?.email !== 'string' || typeof body?.password !== 'string') {
       return sendError(reply, 'VALIDATION_FAILED')
     }
     if (body.password.length < MIN_PASSWORD_LENGTH) {
+      return sendError(reply, 'VALIDATION_FAILED')
+    }
+    // 同意是把简历内容发给模型供应商的前提。没勾就是没同意——
+    // 界面必须让用户单独勾这一项（`docs/privacy-conclusions.md` §7）。
+    if (body.consent !== true) {
       return sendError(reply, 'VALIDATION_FAILED')
     }
 
@@ -65,6 +70,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps): void {
       email,
       passwordHash: await hashPassword(body.password),
     })
+    await store.recordModelConsent(user.id)
 
     // 令牌本体只在邮件链接里出现一次，库里只存哈希
     const token = randomToken()
@@ -217,6 +223,9 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps): void {
       passwordHash: await hashPassword(randomToken()),
     })
     await store.markEmailVerified(user.id)
+    // 演示账号里全是假数据，发给模型供应商没有隐私风险——
+    // 与其让演示路径走不通，不如直接记为已同意。
+    await store.recordModelConsent(user.id)
     await createSession(store, user.id, reply)
 
     return reply.code(201).send({
@@ -228,6 +237,23 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps): void {
   app.get('/api/v1/me', async (request, reply) => {
     const user = await currentUser(store, request)
     if (!user) return sendError(reply, 'AUTH_REQUIRED')
-    return { user: { id: user.id, email: user.email } }
+    return {
+      user: { id: user.id, email: user.email },
+      // 这个账号有没有同意把简历内容发给模型供应商。没有就是没同意。
+      modelConsentAt: await store.modelConsentAt(user.id),
+    }
+  })
+
+  /**
+   * 补记同意。
+   *
+   * 老账号没有同意记录时，用户在界面上打开「本次用模型」会走到这里——
+   * **那一刻就是他的点头**。
+   */
+  app.post('/api/v1/me/model-consent', async (request, reply) => {
+    const user = await currentUser(store, request)
+    if (!user) return sendError(reply, 'AUTH_REQUIRED')
+    await store.recordModelConsent(user.id)
+    return { modelConsentAt: await store.modelConsentAt(user.id) }
   })
 }

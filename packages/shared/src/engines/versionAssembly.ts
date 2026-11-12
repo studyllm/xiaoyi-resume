@@ -1,8 +1,46 @@
 import type { DraftItem, DraftProfile, Jd, UncoveredRequirement, VersionSection } from '../domain/types'
+import { hasResultSignal } from './signals'
 import type { CoverageTier, RequirementCoverage } from './types'
 
 export function tierRank(tier: CoverageTier): number {
   return tier === 'strong' ? 2 : tier === 'weak' ? 1 : 0
+}
+
+/**
+ * 删掉一批要点之后，重算每条要求的覆盖分档。
+ *
+ * **模型路径的分档不是可重算的函数**——模型说「强覆盖」，那是一个判断，
+ * 不是一条能从数据推出来的式子。所以这里按**幸存的引用**重算：
+ * 一条要求的分档由它还剩下哪些命中要点决定。
+ *
+ * 规则路径不用这个：它走 `computeCoverage` 重算，产物逐字不变。
+ *
+ * @param coverage 删之前的分档
+ * @param matchedTexts 要点 id → 正文。用来判断幸存要点里还有没有结果信号
+ * @param removedBulletIds 被删掉的要点 id
+ */
+export function recomputeCoverageAfterRemoval(
+  coverage: RequirementCoverage[],
+  matchedTexts: Map<string, string>,
+  removedBulletIds: Set<string>,
+): RequirementCoverage[] {
+  return coverage.map((entry) => {
+    const survivors = entry.matchedBulletIds.filter((id) => !removedBulletIds.has(id))
+    if (survivors.length === entry.matchedBulletIds.length) return entry
+
+    // 命中的要点全被删了 → 这条要求在剩下的正文里没有依据了
+    if (survivors.length === 0) {
+      return { ...entry, tier: 'none', reason: 'no-match', matchedBulletIds: [] }
+    }
+
+    // 还有依据，但强度要看剩下的要点有没有结果信号
+    const hasResult = survivors.some((id) => {
+      const text = matchedTexts.get(id)
+      return text !== undefined && hasResultSignal(text)
+    })
+    const tier: CoverageTier = hasResult ? entry.tier : 'weak'
+    return { ...entry, tier, matchedBulletIds: survivors }
+  })
 }
 
 export function buildUncovered(coverage: RequirementCoverage[], jd: Jd): UncoveredRequirement[] {

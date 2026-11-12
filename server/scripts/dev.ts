@@ -9,6 +9,10 @@
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
+import { fileURLToPath } from 'node:url'
+
+import { rulesGenerator } from '@xiaoyi/shared/engines/generator'
+import { rulesJdAnalyzer } from '@xiaoyi/shared/engines/jdAnalysis'
 
 import { buildApp } from '../src/app'
 import { createMemoryMailer } from '../src/auth/mailer'
@@ -23,7 +27,7 @@ const embedded = await startEmbeddedPostgres()
 const pool = new Pool({ connectionString: embedded.connectionString })
 const database = drizzle(pool, { schema })
 await migrate(database, {
-  migrationsFolder: new URL('../src/db/migrations', import.meta.url).pathname,
+  migrationsFolder: fileURLToPath(new URL('../src/db/migrations', import.meta.url)),
 })
 
 const app = buildApp({
@@ -33,6 +37,10 @@ const app = buildApp({
   mailer: createMemoryMailer(),
   siteUrl: `http://localhost:5173`,
   from: 'noreply@xiaoyi.local',
+  // 开发环境不接模型供应商：规则引擎那条路。
+  generator: rulesGenerator,
+  analyzer: rulesJdAnalyzer,
+  llm: null,
 })
 
 await app.listen({ port, host: '127.0.0.1' })
