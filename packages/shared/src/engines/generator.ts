@@ -34,6 +34,7 @@ import {
   parseRewrites,
   toPromptBullet,
 } from './llmPrompt'
+import { normalizeModelText } from './transforms'
 import { assembleBody, diffReason } from './versionAssembly'
 import type { EngineContext, GenerateOptions, GenerateVersionResult } from './types'
 
@@ -281,14 +282,37 @@ export function createLlmGenerator(deps: LlmGeneratorDeps): ResumeGenerator {
       const patched = new Map<string, string>()
       let adopted = 0
 
+      /** 这次发出去的事实总数——用来判断模型给的编号是不是「指到别处去了」。 */
+      const totalFacts = flat.reduce((sum, entry) => sum + entry.facts.length, 0)
+
       for (const entry of flat) {
         const rewrite = byKey.get(String(entry.ordinal))
         if (!rewrite) continue
 
-        const cited = rewrite.clauses.map((index) => entry.facts[index - 1])
+        const resolved = rewrite.clauses.map((index) => entry.facts[index - 1])
         const claimId = `llm-${entry.bullet.id}`
 
-        if (cited.length === 0 || cited.some((fact) => !fact)) {
+        /**
+         * 模型给的子句编号对不上时，改用**这条要点自己的全部事实**复核。
+         *
+         * 模型很容易把子句编号当成全局连续的——「要点 4」给的是子句 [4,5,6,7]，
+         * 而这条要点自己只有两三个子句。照抄编号就查不到依据，每条改写都会被
+         * 当成「没指出依据」丢掉——**模型白改，全版回落规则引擎**。
+         *
+         * 改用全部事实不放松底线：这句话仍然要通过事实校验，只是比对的范围
+         * 从「模型自称用的那几条」变成「这条要点本来有的全部事实」——和规则
+         * 路径一个口径（规则路径也是拿整条要点的事实去校验改写后的正文）。
+         *
+         * **编号指到别处去了**（它的号在这次发出去的事实里确实存在）与
+         * **编号是编的**（号比这次的事实总数还大）要分开：后者照旧丢掉。
+         */
+        const offBy = resolved.some((fact) => !fact)
+        const pointsSomewhere = rewrite.clauses.every(
+          (index) => index >= 1 && index <= totalFacts,
+        )
+        const cited = offBy && pointsSomewhere ? entry.facts : resolved
+
+        if (cited.length === 0 || (offBy && !pointsSomewhere)) {
           violations.push({
             bulletId: entry.bullet.id,
             claimId,
@@ -300,12 +324,24 @@ export function createLlmGenerator(deps: LlmGeneratorDeps): ResumeGenerator {
           continue
         }
 
+        if (offBy) {
+          observations.push({
+            bulletId: entry.bullet.id,
+            kind: 'clause-index-missed',
+            detail: '模型给的子句编号对不上，按这条要点的全部事实复核',
+          })
+        }
+
+        // 排版跟规则引擎的产出对齐（句末标点、半角、技术词大小写）。
+        // **只排版，不动词、不动语序**——那是模型自己的活。
+        const text = normalizeModelText(rewrite.text)
+
         const claim = makeClaim({
           claimId,
           bulletId: entry.bullet.id,
-          text: rewrite.text,
+          text,
           operation: cited.length > 1 ? 'merge' : 'rewrite',
-          sourceFactIds: cited.map((fact) => fact!.factId),
+          sourceFactIds: cited.map((fact) => fact.factId),
         })
         const verdict = verifyClaim(claim, entry.facts, {
           draftTerms,
@@ -330,7 +366,7 @@ export function createLlmGenerator(deps: LlmGeneratorDeps): ResumeGenerator {
         }
 
         adopted += 1
-        patched.set(entry.bullet.id, rewrite.text)
+        patched.set(entry.bullet.id, text)
       }
 
       const sections = applyPatchedTexts(baseline.version.sections, patched)

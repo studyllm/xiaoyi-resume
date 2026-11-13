@@ -126,18 +126,36 @@ function isTerm(buffer: string): boolean {
  *
  * R5 用它——「这个词在整份底稿里出现过吗」。底稿全量，不只是被引用的那几条 fact：
  * 实词是中文层面的，放宽一点少误伤；数字、实体、评级、动词才是「事实」层面的，严格。
+ *
+ * **两边都要去掉评级与动词**——比的是内容词，动词与评级各有自己的强度规则。
+ * 去掉之后，底稿里的「支持多部门联合演练」是「多部门联合演练」，被改写的那句
+ * 去掉动词后也是「多部门联合演练」，对得上。**只去一边就对不上**：
+ * 拿去掉动词的词去比没去掉的词，凡是动词打头的要点都会误判成「底稿里没有」。
  */
 export function draftTermsOf(draft: Draft): string[] {
   const terms: string[] = []
   for (const section of draft.sections) {
     for (const item of section.items) {
-      terms.push(...extractTerms(`${item.org ?? ''} ${item.title ?? ''}`))
+      terms.push(...extractTerms(stripRatedAndVerbs(`${item.org ?? ''} ${item.title ?? ''}`)))
       for (const bullet of item.bullets) {
-        terms.push(...extractTerms(bullet.text))
+        terms.push(...extractTerms(stripRatedAndVerbs(bullet.text)))
       }
     }
   }
   return [...new Set(terms)]
+}
+
+/**
+ * 去掉评级词与动词。
+ *
+ * 它们有自己的强度规则（上调拦、降级放）。留着的话，「主导」改成「参与」这种
+ * 弱化会被实词规则当成新词拦掉——降级就永远走不到它自己的规则。
+ */
+function stripRatedAndVerbs(text: string): string {
+  return text.replace(
+    new RegExp([...Object.keys(RATING_STRENGTH), ...Object.keys(VERB_STRENGTH)].join('|'), 'g'),
+    '',
+  )
 }
 
 /** 从一段文字里抽出它的成分。纯规则，不含随机、不读时间。 */
@@ -169,11 +187,8 @@ export function extractComponents(text: string): FactComponent[] {
   // 实词里去掉评级与动词：它们有自己的强度规则（上调拦、降级放）。
   // 留着的话，「主导」改成「参与」这种弱化会被实词规则当成新词拦掉——
   // 降级就永远走不到它自己的规则。
-  const withoutRated = text.replace(
-    new RegExp([...Object.keys(RATING_STRENGTH), ...Object.keys(VERB_STRENGTH)].join('|'), 'g'),
-    '',
-  )
-  for (const term of extractTerms(withoutRated)) {
+  // **底稿那边用同一个函数去掉**（`draftTermsOf`）——两边口径必须一致。
+  for (const term of extractTerms(stripRatedAndVerbs(text))) {
     components.push({ kind: 'term', text: term })
   }
 

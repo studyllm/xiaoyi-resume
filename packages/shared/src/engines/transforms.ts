@@ -128,6 +128,24 @@ function stripTrailingPunctuation(text: string): string {
   return text.replace(/[。．.，,、；;：:！!？?]+$/, '')
 }
 
+/**
+ * 模型改写后的正文，排版上跟规则引擎的产出对齐。
+ *
+ * **只做中性的排版处理**：去项目符号、统一半角与技术词大小写、整理空格、去掉
+ * 句末标点。**不动词、不动语序**——那是模型自己的活，规则引擎不该在这里插手。
+ *
+ * 不对齐的话，同一份版本里模型写的句子带着句号、规则写的句子不带，导出的 PDF
+ * 一眼就能看出两套排版。
+ */
+export function normalizeModelText(text: string): string {
+  let output = stripBulletMarker(text)
+  output = toHalfWidth(output)
+  output = normalizeCatalogCase(output)
+  output = normalizeSpacing(output)
+  output = stripTrailingPunctuation(output)
+  return output
+}
+
 export function applyTransforms(text: string, options: TransformOptions = {}): string {
   const { allowVerbFronting = true } = options
 

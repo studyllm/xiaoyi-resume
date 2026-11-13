@@ -22,8 +22,23 @@ export interface LlmConfig {
   maxCandidateBullets: number
 }
 
-const DEFAULT_TIMEOUT_MS = 30_000
-const DEFAULT_MAX_TOKENS = 2000
+/**
+ * 单次调用的超时。
+ *
+ * **按「一整版简历」的量级定。** 实测（MiniMax-M3.1-Flash，77 条要点的简历）：
+ * 一次改写要 10 分钟上下（每条约 7.6 秒）。按问答的量级（30 秒）配，模型还没
+ * 写完就被掐断——整版回落规则引擎，用户等了几分钟拿到的还是规则写的。
+ */
+const DEFAULT_TIMEOUT_MS = 900_000
+/**
+ * 单次调用的输出 token 上限。
+ *
+ * **按「一整版简历」的量级定，不是按一次问答。** 实测（MiniMax-M3.1-Flash，
+ * 77 条要点的简历）：一次改写要 3 万 token 上下，推理内容占了 78% 的额度。
+ * 按问答的量级（2000）配，模型写一半被截断——整版回落规则引擎，用户等了几分钟
+ * 拿到的还是规则写的。
+ */
+const DEFAULT_MAX_TOKENS = 32000
 const DEFAULT_MAX_CANDIDATE_BULLETS = 40
 
 export function llmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): LlmConfig | null {

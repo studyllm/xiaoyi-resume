@@ -29,7 +29,9 @@ describe('模型供应商的配置', () => {
       LLM_TIMEOUT_MS: '-5',
       LLM_MAX_TOKENS: '800',
     })
-    expect(config?.timeoutMs).toBe(30_000)
+    // 默认值按「一整版简历」的量级给（实测：超时 900 秒、输出 32000）——
+    // 按问答的量级配，模型还没写完就被掐断，整版回落规则引擎
+    expect(config?.timeoutMs).toBe(900_000)
     expect(config?.maxTokens).toBe(800)
   })
 })
