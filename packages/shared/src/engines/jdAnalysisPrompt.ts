@@ -12,7 +12,7 @@ import type { Draft } from '../domain/types'
 import { SECTION_TITLES } from '../domain/types'
 
 /** 提示词版本。变了就换号——分析记录靠它区分两批输出。 */
-export const PROMPT_VERSION = 'llm-jd-analysis-v1'
+export const PROMPT_VERSION = 'llm-jd-analysis-v2'
 
 /**
  * 给模型看的简历要点。
@@ -42,14 +42,24 @@ const SYSTEM = `你是一位岗位要求分析助手。给定一份岗位描述�
    - weak：简历里有相关经历，但没有直接对应这条要求
    - none：简历里没有对应的事实
 4. tier 是 strong 或 weak 时，bullets 填命中的简历要点序号（从 1 开始）。tier 是 none 时 bullets 必须是空数组。
-5. **只能引用给定的序号**，不要编造。
+5. **只能引用给定的序号**，不要编造。序号是这条要点在整份简历里的位置，可能不连续——被略过的是与这个岗位无关的要点。
 6. 不得写出简历里没有的内容。
 
 只输出 JSON，不要任何解释：
 {"requirements":[{"quote":"岗位描述里的原句","tier":"strong","bullets":[1,2]}]}`
 
-/** 把简历摊平成给模型看的编号列表。 */
-export function toPromptBullets(draft: Draft): PromptBullet[] {
+/**
+ * 把简历摊平成给模型看的编号列表。
+ *
+ * **序号是整份简历里的位置，不重编**——`includeBulletIds` 给出要发的那几条，
+ * 它们的序号仍然是全量编号。被略过的要点因此在编号上留下空档，模型回引的号
+ * 还能对回原文（`jdAnalysis.ts` 按全量编号查表）。
+ */
+export function toPromptBullets(
+  draft: Draft,
+  options: { includeBulletIds?: ReadonlySet<string> } = {},
+): PromptBullet[] {
+  const include = options.includeBulletIds
   const bullets: PromptBullet[] = []
   let ordinal = 0
 
@@ -58,6 +68,7 @@ export function toPromptBullets(draft: Draft): PromptBullet[] {
       const label = [item.org, item.title].filter(Boolean).join(' · ')
       for (const bullet of item.bullets) {
         ordinal += 1
+        if (include && !include.has(bullet.id)) continue
         bullets.push({
           ordinal,
           sectionKind: SECTION_TITLES[section.kind] ?? section.kind,
@@ -83,6 +94,7 @@ export function buildJdAnalysisPrompt(input: { jdText: string; bullets: PromptBu
   if (input.bullets.length === 0) {
     lines.push('（这份简历里没有要点）')
   } else {
+    lines.push('（编号是这条要点在整份简历里的位置，中间被略过的是与这个岗位无关的要点）')
     for (const bullet of input.bullets) {
       const label = bullet.itemLabel ? ` | ${bullet.itemLabel}` : ''
       lines.push(`要点 ${bullet.ordinal}${label}：${bullet.text}`)

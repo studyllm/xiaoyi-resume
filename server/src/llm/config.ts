@@ -13,10 +13,18 @@ export interface LlmConfig {
   timeoutMs: number
   /** 单次生成的输出 token 上限。成本护栏的第一道闸。 */
   maxTokens: number
+  /**
+   * 比对时最多发多少条要点给模型。
+   *
+   * **裁剪只影响模型能看到什么**，不影响系统能判定什么——模型判「未覆盖」
+   * 的要求会用规则引擎在全部要点上复核一次。
+   */
+  maxCandidateBullets: number
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_MAX_TOKENS = 2000
+const DEFAULT_MAX_CANDIDATE_BULLETS = 40
 
 export function llmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): LlmConfig | null {
   const baseUrl = env.LLM_BASE_URL?.trim()
@@ -30,6 +38,10 @@ export function llmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): LlmConfi
     model,
     timeoutMs: positiveNumber(env.LLM_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
     maxTokens: positiveNumber(env.LLM_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+    maxCandidateBullets: positiveNumber(
+      env.LLM_MAX_CANDIDATE_BULLETS,
+      DEFAULT_MAX_CANDIDATE_BULLETS,
+    ),
   }
 }
 

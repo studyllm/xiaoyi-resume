@@ -111,7 +111,7 @@
 | `DELETE /api/v1/versions/:id` | 登录 | 是 | 删版本 |
 | `GET /api/v1/versions/:id/body` | 登录 | 是 | 版本正文（`format=text\|markdown`） |
 | `GET /api/v1/healthz` | 公开 | 是 | 健康检查 |
-| `GET /api/v1/engine` | 公开 | 是 | 服务端有没有配模型供应商。前端据此决定「本次用模型」那个开关显不显示 |
+| `GET /api/v1/engine` | 公开 | 是 | 服务端有没有配模型供应商。前端据此决定「本次用模型」那个开关显不显示。响应里带 `timeoutMs`——客户端等待模型的上限 |
 | `GET /api/v1/me` | 登录 | 是 | 当前账号。响应里带 `modelConsentAt`（这个账号有没有同意把简历内容发给模型供应商） |
 | `POST /api/v1/me/model-consent` | 登录 | 是 | 补记同意。老账号在界面上打开「本次用模型」时走这里——**那一刻就是他的点头** |
 
@@ -211,11 +211,14 @@ POST /api/v1/jd/analyze
   "warnings": [],
   "engine": "llm",
   "degraded": false,
-  "degradeReason": null
+  "degradeReason": null,
+  "scope": { "totalBullets": 77, "comparedBullets": 40 }
 }
 ```
 
 解析与覆盖算在一次调用里——前端不需要先拿 JD 再算覆盖，多一次往返没有意义。
+
+- `scope` 是这次比对的范围：简历里共多少条要点、实际参与比对的有多少条。**规则路径两个数相等**；模型路径只把与该岗位相关的要点交给模型，其余的由规则引擎在全部要点上复核。
 
 - **跑在已保存的简历上**：前端要先存后分析，比对的就是服务端那份。
 - `roleNameSource` 取 `domain/types.ts` 里 `RoleNameSource` 的合法值：`explicit` / `pattern` / `first-line` / `phrase` / `fallback`。**岗位名不由模型给**——它由规则引擎出，模型只负责「抽要求 + 判命中」。
@@ -241,14 +244,15 @@ POST /api/v1/versions
 - 响应里的 `integrity` 用 ADR-0003 的新形状（`generator` / `reverted` / `degraded` / `observations` / `violations[].kind`）。
 - `generator` 是 `llm` 时，这一版的正文里有模型写的要点；`degraded` 为真表示这次生成没有完全用上模型。
 - `coverageEngine` 与 `coverageDegradeReason` 说明**覆盖清单**是谁算的：`'llm'` 是模型逐条比对，`'rules'` 是关键词目录匹配。老版本没有这两个字段，按 `'rules'` 看。
-- 生成可能耗时（P4 接模型后十秒级），客户端超时设 **30 秒**，超时后按「离线/超时」降级提示，**不重复提交**（靠 `Idempotency-Key`）。
+- 生成可能耗时（接模型后实测分钟级，见 `server/.env.example`），客户端超时由 `GET /api/v1/engine` 下发的 `timeoutMs` 加一分钟余量决定——**两边不再各写一个数**。超时后提示用户刷新版本列表（这次可能已经生成好了），**不重复提交**（靠 `Idempotency-Key`）。
+- 响应里的 `version` 带 `explain`——这一版的生成经过（`version-generation-trace`）。改动之前生成的版本没有这个键，界面显示「这一版生成时没有记录生成过程」。
 
 ```http
 GET /api/v1/versions?page=1&pageSize=20
 → 200 { "items": [ { "id": "ver_…", "name": "…", "jdRoleName": "…", "draftRevision": 4, "createdAt": "…" } ], "page": 1, "pageSize": 20, "total": 47 }
 ```
 
-列表项是**完整版本**。一份简历的版本通常只有几十个，一并返回省掉前端逐个拉详情；`pageSize` 上限 100，最坏情况也就几百 KB。`GET /api/v1/versions/:id` 仍然保留——深链与打印页要能直接按 id 取。
+列表项是**完整版本**，但**不含「生成经过」明细**（`explain`）——逐条带上会让列表重出一倍。要看明细打开详情页。一份简历的版本通常只有几十个，一并返回省掉前端逐个拉详情；`pageSize` 上限 100，最坏情况也就几百 KB。`GET /api/v1/versions/:id` 仍然保留——深链与打印页要能直接按 id 取。
 
 ```http
 GET /api/v1/versions/:id/body?format=markdown

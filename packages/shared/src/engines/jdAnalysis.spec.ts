@@ -54,6 +54,22 @@ function chatReturning(text: string): ChatCompletion {
   return async () => ({ text, promptTokens: 120, completionTokens: 60 })
 }
 
+/** 记下发给模型的提示词。 */
+function chatSpy(text: string, seen: string[]): ChatCompletion {
+  return async (request) => {
+    seen.push(request.messages.map((message) => message.content).join('\n'))
+    return { text, promptTokens: 120, completionTokens: 60 }
+  }
+}
+
+/** 三个要点的简历：中间那条与这个岗位无关。 */
+function makeDraftWithIrrelevantBullet(): Draft {
+  const draft = makeDraft()
+  const bullets = draft.sections[1]!.items[0]!.bullets
+  bullets.splice(1, 0, { id: 'bullet-mid', text: '负责周会组织与团队文档整理' })
+  return draft
+}
+
 function modelRequirements(entries: unknown[]): string {
   return JSON.stringify({ requirements: entries })
 }
@@ -125,6 +141,92 @@ describe('解析模型的输出', () => {
   })
 })
 
+describe('比对时只把候选要点发给模型', () => {
+  it('与岗位无关的要点不进提示词', async () => {
+    const seen: string[] = []
+    const chat = chatSpy(
+      modelRequirements([{ quote: '精通 Vue 与 TypeScript', tier: 'strong', bullets: [1] }]),
+      seen,
+    )
+
+    await createLlmJdAnalyzer({ chat, model: 'test-model' }).analyze(
+      makeDraftWithIrrelevantBullet(),
+      JD,
+      CTX,
+    )
+
+    expect(seen[0]).toContain('要点 1')
+    expect(seen[0]).not.toContain('周会组织')
+  })
+
+  it('JD 全文照发', async () => {
+    const seen: string[] = []
+    const chat = chatSpy(
+      modelRequirements([{ quote: '精通 Vue 与 TypeScript', tier: 'strong', bullets: [1] }]),
+      seen,
+    )
+
+    await createLlmJdAnalyzer({ chat, model: 'test-model' }).analyze(
+      makeDraftWithIrrelevantBullet(),
+      JD,
+      CTX,
+    )
+
+    expect(seen[0]).toContain('熟悉 Docker 与 CI/CD 流程')
+  })
+
+  it('候选要点保留在整份简历里的原序号', async () => {
+    const seen: string[] = []
+    const chat = chatSpy(
+      modelRequirements([{ quote: '精通 Vue 与 TypeScript', tier: 'strong', bullets: [1] }]),
+      seen,
+    )
+
+    await createLlmJdAnalyzer({ chat, model: 'test-model' }).analyze(
+      makeDraftWithIrrelevantBullet(),
+      JD,
+      CTX,
+    )
+
+    // 第 2 条没参与比对，因此编号从 1 跳到 3——跳号而不是重编
+    expect(seen[0]).toContain('要点 1')
+    expect(seen[0]).toContain('要点 3')
+    expect(seen[0]).not.toContain('要点 2')
+    expect(seen[0]).toContain('被略过的是与这个岗位无关的要点')
+  })
+
+  it('模型引用了没发给它的序号时那条引用被丢掉', async () => {
+    const chat = chatReturning(
+      modelRequirements([{ quote: '精通 Vue 与 TypeScript', tier: 'strong', bullets: [2] }]),
+    )
+
+    const result = await createLlmJdAnalyzer({ chat, model: 'test-model' }).analyze(
+      makeDraftWithIrrelevantBullet(),
+      JD,
+      CTX,
+    )
+
+    expect(result.warnings.join(' ')).toContain('不存在的简历要点')
+    // 引用没被采用——命中要点里没有第 2 条
+    expect(result.coverage[0]!.matchedBulletIds).not.toContain('bullet-mid')
+  })
+
+  it('这次比对了多少条要点随结果一起给出', async () => {
+    const chat = chatReturning(
+      modelRequirements([{ quote: '精通 Vue 与 TypeScript', tier: 'strong', bullets: [1] }]),
+    )
+
+    const result = await createLlmJdAnalyzer({ chat, model: 'test-model' }).analyze(
+      makeDraftWithIrrelevantBullet(),
+      JD,
+      CTX,
+    )
+
+    expect(result.bulletsTotal).toBe(3)
+    expect(result.bulletsCompared).toBe(2)
+  })
+})
+
 describe('模型比对的结论要逐条核对', () => {
   it('要求不在 JD 原文中的被丢掉，并记一条提示', async () => {
     const chat = chatReturning(
@@ -156,9 +258,12 @@ describe('模型比对的结论要逐条核对', () => {
       CTX,
     )
 
-    expect(result.coverage[0]!.tier).toBe('none')
-    expect(result.coverage[0]!.matchedBulletIds).toEqual([])
+    // 引用被丢掉：模型说的那个序号压根没发给它
     expect(result.warnings.join(' ')).toContain('不存在的简历要点')
+    // 但简历里确实有对应事实——复核后按弱覆盖处理，不说「没有对应事实」
+    expect(result.coverage[0]!.tier).toBe('weak')
+    expect(result.coverage[0]!.approximate).toBe(true)
+    expect(result.coverage[0]!.matchedBulletIds).toEqual(['bullet-1'])
   })
 
   it('说「强覆盖」但要点没有结果信号时降为弱覆盖', async () => {
@@ -191,7 +296,7 @@ describe('模型比对的结论要逐条核对', () => {
     expect(result.coverage[0]!.matchedBulletIds).toEqual(['bullet-1'])
   })
 
-  it('说没命中就当没命中', async () => {
+  it('模型说没命中，但在全部要点上复核到事实时按弱覆盖处理', async () => {
     const chat = chatReturning(
       modelRequirements([{ quote: '精通 Vue 与 TypeScript', tier: 'none', bullets: [1] }]),
     )
@@ -202,7 +307,29 @@ describe('模型比对的结论要逐条核对', () => {
       CTX,
     )
 
+    // 模型只看到了候选要点，判「未覆盖」；简历里其实有 Vue 3 这条事实，
+    // 复核后不能对用户说「没有对应事实」
+    expect(result.coverage[0]!.tier).toBe('weak')
+    expect(result.coverage[0]!.approximate).toBe(true)
+    expect(result.coverage[0]!.matchedBulletIds).toEqual(['bullet-1'])
+  })
+
+  it('复核后仍匹配不到的要求才算未覆盖', async () => {
+    const chat = chatReturning(
+      modelRequirements([{ quote: '熟悉 Docker 与 CI/CD 流程', tier: 'none', bullets: [] }]),
+    )
+    // 这份简历里没有 Docker 与 CI/CD 的事实——复核也匹配不到
+    const draft = makeDraft()
+    draft.sections[1]!.items[0]!.bullets.splice(1)
+
+    const result = await createLlmJdAnalyzer({ chat, model: 'test-model' }).analyze(
+      draft,
+      JD,
+      CTX,
+    )
+
     expect(result.coverage[0]!.tier).toBe('none')
+    expect(result.coverage[0]!.approximate).toBe(false)
     expect(result.coverage[0]!.matchedBulletIds).toEqual([])
   })
 

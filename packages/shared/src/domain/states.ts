@@ -193,7 +193,7 @@ export const FAILURE_STATES = defineStates({
   },
   'llm-timeout': {
     title: '模型响应超时',
-    hint: '这次先用规则引擎生成，或者稍后再试。',
+    hint: '等太久了。刷新版本列表看看，这次可能已经生成好了；也可以稍后再试。',
     code: 'LLM_TIMEOUT',
   },
   'email-send-failed': {
@@ -306,6 +306,11 @@ export const EMPTY_STATES = defineStates({
   'all-covered': {
     title: '要求都能找到对应事实',
     hint: '这份 JD 的要求在你的简历中都有对应事实，不需要额外补充。',
+  },
+  'no-generation-trace': {
+    title: '这一版生成时没有记录生成过程',
+    hint: '这个版本是在开始记录生成过程之前生成的。重新生成一版，就能看到完整的生成经过。',
+    action: '重新生成一版',
   },
 })
 

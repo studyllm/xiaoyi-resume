@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ALL_STATES } from '@xiaoyi/shared/domain/states'
+import { ALL_STATES, FAILURE_STATES } from '@xiaoyi/shared/domain/states'
 import { ApiError, api, stateForCode } from './client'
 
 describe('错误码映射', () => {
@@ -58,5 +58,55 @@ describe('响应体不是 JSON 时', () => {
     const error = await api('/api/v1/draft/parse').catch((caught) => caught)
     expect(error).toBeInstanceOf(ApiError)
     expect((error as ApiError).offline).toBe(false)
+  })
+})
+
+describe('等太久了', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('超时时说清下一步——刷新列表看看这次可能已经生成好了', async () => {
+    // fetch 一直挂着，直到信号超时
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(init.signal!.reason)
+          })
+        }),
+    )
+
+    const error = await api('/api/v1/versions', { method: 'POST', timeoutMs: 10 }).catch(
+      (caught) => caught,
+    )
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).state).toBe(FAILURE_STATES['llm-timeout'])
+    expect((error as ApiError).offline).toBe(false)
+  })
+
+  it('用户主动取消原样抛回去，不当成超时', async () => {
+    const controller = new AbortController()
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(init.signal!.reason)
+          })
+        }),
+    )
+
+    const pending = api('/api/v1/versions', {
+      method: 'POST',
+      timeoutMs: 10_000,
+      signal: controller.signal,
+    }).catch((caught) => caught)
+
+    controller.abort()
+    const error = await pending
+
+    expect(error).not.toBeInstanceOf(ApiError)
+    expect((error as DOMException).name).toBe('AbortError')
   })
 })

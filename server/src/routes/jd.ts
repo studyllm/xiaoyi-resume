@@ -121,6 +121,7 @@ export async function mayUseModel(
 /** 比对结果 → 响应。 */
 export function toResponse(row: StoredJdAnalysis): Record<string, unknown> {
   const payload = row.payload
+  const totalBullets = payload.bulletsTotal ?? payload.evidence.length
   return {
     analysisId: row.id,
     roleName: payload.jd.roleName,
@@ -131,6 +132,11 @@ export function toResponse(row: StoredJdAnalysis): Record<string, unknown> {
     engine: payload.engine,
     degraded: payload.degraded,
     degradeReason: payload.degradeReason,
+    // 这次比对的范围：简历里共多少条要点、实际比对了多少条
+    scope: {
+      totalBullets,
+      comparedBullets: payload.bulletsCompared ?? totalBullets,
+    },
   }
 }
 

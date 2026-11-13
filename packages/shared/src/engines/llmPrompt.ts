@@ -4,10 +4,10 @@
  * **引用用子句序号**：模型看到的是「子句 1、子句 2」，回引也用序号。
  * 让模型抄 factId（16 位哈希）抄错一位就查不出依据——查不出依据等于没引用。
  */
-import type { Fact } from '../domain/types'
+import type { Fact, RequirementCoverage } from '../domain/types'
 
 /** 提示词版本。变了就换号——生成日志靠它区分两批输出。 */
-export const PROMPT_VERSION = 'llm-rewrite-v1'
+export const PROMPT_VERSION = 'llm-rewrite-v2'
 
 export interface PromptBullet {
   /** 要点的序号，从 1 开始。模型回引时用这个号。 */
@@ -35,18 +35,24 @@ const SYSTEM = `你是一位简历改写助手。你只能改写给定的要点�
 只输出 JSON，不要任何解释：
 {"bullets":[{"key":"1","clauses":[1],"text":"改写后的正文"}]}`
 
-/** 拼提示词。 */
+/**
+ * 拼提示词。
+ *
+ * **只发已覆盖的要求**——简历里没有对应事实的要求，发给模型只会诱导它去
+ * 「照顾」一条根本没有事实可写的要求。
+ */
 export function buildRewritePrompt(input: {
   role: string
-  requirements: string[]
+  requirements: RequirementCoverage[]
   bullets: PromptBullet[]
 }): RewritePrompt {
   const lines: string[] = [`岗位：${input.role || '未命名岗位'}`, '']
 
-  if (input.requirements.length > 0) {
+  const covered = input.requirements.filter((entry) => entry.tier !== 'none')
+  if (covered.length > 0) {
     lines.push('这一版要覆盖的要求：')
-    input.requirements.forEach((requirement, index) => {
-      lines.push(`${index + 1}. ${requirement}`)
+    covered.forEach((requirement, index) => {
+      lines.push(`${index + 1}. ${requirement.text}`)
     })
     lines.push('')
   }

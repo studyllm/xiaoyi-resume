@@ -51,6 +51,7 @@ const analyzer = llm
       chat: createOpenAiChat(llm),
       model: llm.model,
       maxTokens: llm.maxTokens,
+      maxCandidateBullets: llm.maxCandidateBullets,
     })
   : rulesJdAnalyzer
 
@@ -96,7 +97,7 @@ const app = buildApp({
   store: createPostgresStore(database),
   generator,
   analyzer,
-  llm: llm ? { model: llm.model } : null,
+  llm: llm ? { model: llm.model, timeoutMs: llm.timeoutMs } : null,
   idempotency: createMemoryIdempotencyStore(),
   mailer,
   siteUrl: required('SITE_URL'),

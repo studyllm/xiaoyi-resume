@@ -1,5 +1,5 @@
 import { ERROR_CODES, type ErrorCode } from '@xiaoyi/shared/contracts/error-codes'
-import { ALL_STATES, type StateCopy } from '@xiaoyi/shared/domain/states'
+import { ALL_STATES, FAILURE_STATES, type StateCopy } from '@xiaoyi/shared/domain/states'
 
 /** 后端返回的错误。`state` 是要展示给用户的那一条。 */
 export class ApiError extends Error {
@@ -50,6 +50,13 @@ export interface ApiOptions {
   /** 额外请求头。乐观并发要用 If-Match 带修订号。 */
   headers?: Record<string, string>
   signal?: AbortSignal
+  /**
+   * 等这个响应最多等多久（毫秒）。
+   *
+   * **超时与用户主动取消是两回事**——超时要给出「刷新看看这次可能已经生成好了」
+   * 这种下一步，取消就原样抛回去。
+   */
+  timeoutMs?: number
 }
 
 /**
@@ -64,6 +71,8 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey
   for (const [name, value] of Object.entries(options.headers ?? {})) headers[name] = value
 
+  const signal = withTimeout(options.signal, options.timeoutMs)
+
   let response: Response
   try {
     response = await fetch(path, {
@@ -71,11 +80,16 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
       headers,
       credentials: 'same-origin',
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: options.signal,
+      signal,
     })
   } catch (error) {
-    // 连不上服务端：给「离线」那一条，不是「出了点问题」
+    // 等太久了：服务端可能还在跑，也可能已经做完了。提示用户去刷新看看。
+    if (isTimeoutError(error)) {
+      throw new ApiError('UNKNOWN', FAILURE_STATES['llm-timeout']!)
+    }
+    // 用户主动取消：原样抛回去
     if (error instanceof DOMException && error.name === 'AbortError') throw error
+    // 连不上服务端：给「离线」那一条，不是「出了点问题」
     throw new ApiError('UNKNOWN', ALL_STATES['offline']!, undefined, undefined, true)
   }
 
@@ -104,4 +118,23 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 
   const { state } = stateForCode(code)
   throw new ApiError(code as ErrorCode | 'UNKNOWN', state, field, requestId)
+}
+
+/**
+ * 把外部的取消信号与等待上限合成一个。
+ *
+ * 两个都没有就原样返回——不制造多余的信号。
+ */
+function withTimeout(signal: AbortSignal | undefined, timeoutMs: number | undefined): AbortSignal | undefined {
+  if (!timeoutMs || timeoutMs <= 0) return signal
+  const timeout = AbortSignal.timeout(timeoutMs)
+  if (!signal) return timeout
+  // 两个都要在：外部取消与等待上限，任一触发都算数
+  return typeof AbortSignal.any === 'function' ? AbortSignal.any([signal, timeout]) : timeout
+}
+
+/** 是不是等太久了。 */
+function isTimeoutError(error: unknown): boolean {
+  if (!(error instanceof DOMException)) return false
+  return error.name === 'TimeoutError'
 }

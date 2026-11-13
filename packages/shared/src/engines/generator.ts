@@ -11,13 +11,16 @@ import type {
   Claim,
   DiffEntry,
   Draft,
+  ExplainModelCall,
   Fact,
   IntegrityObservation,
   IntegrityViolation,
   ResumeVersion,
   VersionBullet,
 } from '../domain/types'
+import { buildExplain } from './explain'
 import { generateVersion } from './generateVersion'
+import { assertCleanOutput } from './forbidden'
 import {
   draftTermsOf,
   extractComponents,
@@ -147,18 +150,73 @@ export function createLlmGenerator(deps: LlmGeneratorDeps): ResumeGenerator {
 
       const flat = flattenBullets(baseline.version, factsByBullet)
 
+      // 「这一版是怎么来的」——两次模型调用的记录。比对那次的来自分析结果，
+      // 改写这次的是这里算出来的。
+      const analysis = options.analysis ?? null
+      const calls: ExplainModelCall[] = []
+      if (analysis?.call) {
+        calls.push({ stage: 'analyze', ...analysis.call })
+      }
+
+      /** 把面板数据挂到版本上。 */
+      const withExplain = (
+        result: GenerationResult,
+        rewriteCall: ExplainModelCall | null,
+      ): GenerationResult => {
+        if (rewriteCall) calls.push(rewriteCall)
+        const totalBullets = analysis?.bulletsTotal ?? result.version.diff.length
+        const comparedBullets = analysis?.bulletsCompared ?? totalBullets
+        const explain = buildExplain({
+          version: result.version,
+          coverage: result.coverage,
+          selection: analysis?.selection ?? null,
+          scope: { comparedBullets, totalBullets },
+          calls,
+        })
+        return { ...result, version: { ...result.version, explain } }
+      }
+
+      const rewriteCall = (input: {
+        bulletsSent: number
+        promptTokens: number
+        completionTokens: number
+        degraded: boolean
+        degradeReason: string | null
+      }): ExplainModelCall => ({
+        stage: 'rewrite',
+        model,
+        promptVersion: PROMPT_VERSION,
+        bulletsSent: input.bulletsSent,
+        promptTokens: input.promptTokens,
+        completionTokens: input.completionTokens,
+        degraded: input.degraded,
+        degradeReason: input.degradeReason,
+      })
+
       // 用户这次不要用模型：全程走规则引擎，简历正文不发给任何第三方。
       if (options.useLlm === false) {
-        return rulesOutcome(baseline, { error: null, model: null, bullets: flat.length })
+        return withExplain(
+          rulesOutcome(baseline, { error: null, model: null, bullets: flat.length }),
+          null,
+        )
       }
 
       if (flat.length === 0) {
-        return rulesOutcome(baseline, { error: '这一版没有可改写的要点', model, bullets: 0 })
+        return withExplain(
+          rulesOutcome(baseline, { error: '这一版没有可改写的要点', model, bullets: 0 }),
+          rewriteCall({
+            bulletsSent: 0,
+            promptTokens: 0,
+            completionTokens: 0,
+            degraded: true,
+            degradeReason: '这一版没有可改写的要点',
+          }),
+        )
       }
 
       const prompt = buildRewritePrompt({
         role: baseline.version.jdRoleName,
-        requirements: baseline.version.coverage.map((entry) => entry.text),
+        requirements: baseline.version.coverage,
         bullets: flat.map((entry) =>
           toPromptBullet(String(entry.ordinal), entry.facts, entry.bullet.text),
         ),
@@ -181,19 +239,39 @@ export function createLlmGenerator(deps: LlmGeneratorDeps): ResumeGenerator {
         promptTokens = response.promptTokens ?? 0
         completionTokens = response.completionTokens ?? 0
       } catch (error) {
-        return rulesOutcome(baseline, { error: messageOf(error), model, bullets: flat.length })
+        const reason = messageOf(error)
+        return withExplain(
+          rulesOutcome(baseline, { error: reason, model, bullets: flat.length }),
+          rewriteCall({
+            bulletsSent: flat.length,
+            promptTokens: 0,
+            completionTokens: 0,
+            degraded: true,
+            degradeReason: reason,
+          }),
+        )
       }
 
       const rewrites = parseRewrites(raw)
       if (!rewrites) {
-        return rulesOutcome(baseline, {
-          error: '模型返回的内容无法解析',
-          model,
-          rawOutput: raw,
-          promptTokens,
-          completionTokens,
-          bullets: flat.length,
-        })
+        const reason = '模型返回的内容无法解析'
+        return withExplain(
+          rulesOutcome(baseline, {
+            error: reason,
+            model,
+            rawOutput: raw,
+            promptTokens,
+            completionTokens,
+            bullets: flat.length,
+          }),
+          rewriteCall({
+            bulletsSent: flat.length,
+            promptTokens,
+            completionTokens,
+            degraded: true,
+            degradeReason: reason,
+          }),
+        )
       }
 
       const byKey = new Map(rewrites.map((rewrite) => [rewrite.key, rewrite]))
@@ -259,9 +337,35 @@ export function createLlmGenerator(deps: LlmGeneratorDeps): ResumeGenerator {
       const diff = applyPatchedDiff(baseline.version.diff, patched)
       const reverted = flat.length - adopted
 
+      const body = assembleBody(sections, baseline.version.profile)
+
+      // **模型写的正文也要过禁用词检查**——规格早就要求，只是没做到。
+      // 命中就整版回落规则产出：底线优先于一次生成的成功率。
+      try {
+        assertCleanOutput(body, '版本正文')
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : '模型改写后的正文含有界面禁用词'
+        return withExplain(
+          rulesOutcome(baseline, {
+            error: reason,
+            model,
+            promptTokens,
+            completionTokens,
+            bullets: flat.length,
+          }),
+          rewriteCall({
+            bulletsSent: flat.length,
+            promptTokens,
+            completionTokens,
+            degraded: true,
+            degradeReason: reason,
+          }),
+        )
+      }
+
       const version: ResumeVersion = {
         ...baseline.version,
-        body: assembleBody(sections, baseline.version.profile),
+        body,
         sections,
         diff,
         integrity: {
@@ -278,21 +382,31 @@ export function createLlmGenerator(deps: LlmGeneratorDeps): ResumeGenerator {
         },
       }
 
-      return {
-        version,
-        coverage: baseline.coverage,
-        trace: {
-          engine: adopted > 0 ? 'llm' : 'rules',
-          model,
-          promptVersion: PROMPT_VERSION,
+      return withExplain(
+        {
+          version,
+          coverage: baseline.coverage,
+          trace: {
+            engine: adopted > 0 ? 'llm' : 'rules',
+            model,
+            promptVersion: PROMPT_VERSION,
+            promptTokens,
+            completionTokens,
+            rawOutput: raw,
+            error: null,
+            reverted,
+            degraded: reverted > 0,
+          },
+        },
+        rewriteCall({
+          bulletsSent: flat.length,
           promptTokens,
           completionTokens,
-          rawOutput: raw,
-          error: null,
-          reverted,
-          degraded: reverted > 0,
-        },
-      }
+          // 调用本身成功了——个别改写没过校验不算这次调用没用上
+          degraded: false,
+          degradeReason: null,
+        }),
+      )
     },
   }
 }
@@ -347,13 +461,15 @@ function applyPatchedDiff(
   if (patched.size === 0) return diff
   return diff.map((entry) => {
     const text = patched.get(entry.bulletId)
-    if (!text) return entry
+    if (!text) return { ...entry, writtenBy: 'rules' }
     const change: DiffEntry['change'] = text === entry.fromText ? 'keep' : 'rewrite'
     return {
       ...entry,
       change,
       toText: text,
       reason: diffReason({ change, placement: entry.placement }),
+      // 这一句是模型写的
+      writtenBy: 'model',
     }
   })
 }

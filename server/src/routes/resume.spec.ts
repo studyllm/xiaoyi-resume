@@ -185,6 +185,50 @@ describe('简历与版本的端点', () => {
     expect(body.items[0].body).toBe('工作经历')
   })
 
+  it('列表里不带「这一版是怎么来的」，详情里带', async () => {
+    const h = harness()
+    const cookie = await login(h)
+    const user = await h.store.findUserByEmail('someone@example.com')
+    const payload = {
+      ...versionOf('v1', '第一个'),
+      explain: {
+        pipeline: {
+          requirementCount: 2,
+          totalBullets: 3,
+          comparedBullets: 3,
+          keptBullets: 1,
+          modelRewritten: 0,
+          reverted: 0,
+          checked: 1,
+        },
+        bullets: [],
+        rewrites: [],
+        model: { calls: [] },
+      },
+    }
+    await h.store.addVersion({
+      id: 'v1',
+      userId: user!.id,
+      payload: payload as never,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    })
+
+    const list = await h.app.inject({
+      method: 'GET',
+      url: '/api/v1/versions',
+      cookies: { session: cookie },
+    })
+    // 列表不带明细——省得每次拉一整屏的生成经过
+    expect(list.json().items[0].explain).toBeUndefined()
+
+    const detail = await h.app.inject({
+      method: 'GET',
+      url: '/api/v1/versions/v1',
+      cookies: { session: cookie },
+    })
+    expect(detail.json().version.explain.pipeline.requirementCount).toBe(2)
+  })
+
   it('别人的版本看不见', async () => {
     const h = harness()
     const cookie = await login(h)

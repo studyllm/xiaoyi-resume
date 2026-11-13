@@ -149,6 +149,12 @@ export interface DiffEntry {
   toText: string | null
   toIndex: number | null
   reason: string
+  /**
+   * 这一句正文是谁写的。
+   *
+   * **可选**：改动之前生成的版本没有这个字段，按 `'rules'` 看。
+   */
+  writtenBy?: 'model' | 'rules'
 }
 
 export type UncoveredReason = 'no-match' | 'planned-only'
@@ -342,6 +348,89 @@ export interface ResumeVersion {
   /** 版本自带的审计线索。模型生成的版本带，规则生成的版本不带。 */
   trace?: VersionTrace | null
   engineVersion: string
+  /**
+   * 这一版是怎么来的。
+   *
+   * **可选**：改动之前生成的版本没有这个键，界面显示「这一版生成时没有记录生成过程」。
+   */
+  explain?: VersionExplain
+}
+
+/** 这一版经过的步骤与每步的条数。 */
+export interface ExplainPipeline {
+  /** 抽到几条要求。 */
+  requirementCount: number
+  /** 简历里的要点总数。 */
+  totalBullets: number
+  /** 这次参与比对的要点条数。 */
+  comparedBullets: number
+  /** 进了这一版的要点条数。 */
+  keptBullets: number
+  /** 模型改写了多少条。 */
+  modelRewritten: number
+  /** 多少处没有通过校验、换回了规则产出。 */
+  reverted: number
+  /** 校验了多少条。 */
+  checked: number
+}
+
+/** 一条要点进了还是没进这一版，以及依据。 */
+export interface ExplainBullet {
+  bulletId: string
+  sectionKind: SectionKind
+  sectionTitle: string
+  itemLabel: string
+  /** 保留、改写还是已移除。 */
+  outcome: DiffChange
+  /** 为什么是这个结果。 */
+  reason: string
+  /** 这条要点有没有参与比对。 */
+  compared: boolean
+  /** 命中了哪几条要求。 */
+  matchedRequirements: string[]
+  /** 这句正文是谁写的。 */
+  writtenBy: 'model' | 'rules'
+}
+
+/** 模型的改写与最终采用的那一句。 */
+export interface ExplainRewrite {
+  bulletId: string
+  /** 模型写的那一句。 */
+  modelText: string
+  /** 最终采用的那一句。 */
+  finalText: string
+  /** 没通过校验的类型。 */
+  rejectedKind: string | null
+  /** 没通过校验的原因。 */
+  rejectedReason: string | null
+}
+
+/** 一次模型调用的记录。 */
+export interface ExplainModelCall {
+  stage: 'analyze' | 'rewrite'
+  model: string
+  promptVersion: string
+  /** 这次发给了模型多少条要点。 */
+  bulletsSent: number
+  promptTokens: number
+  completionTokens: number
+  degraded: boolean
+  degradeReason: string | null
+}
+
+/**
+ * 「这一版是怎么来的」。
+ *
+ * **生成时一次性算好**——版本是快照，面板描述的必须是生成当刻的事实，
+ * 不能在详情页现算（老版本的面板会拿不到数据）。
+ */
+export interface VersionExplain {
+  pipeline: ExplainPipeline
+  bullets: ExplainBullet[]
+  rewrites: ExplainRewrite[]
+  model: {
+    calls: ExplainModelCall[]
+  }
 }
 
 export interface User {

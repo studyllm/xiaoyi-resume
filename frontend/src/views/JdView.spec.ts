@@ -46,6 +46,7 @@ function analysis(overrides: Partial<JdAnalysisResponse> = {}): JdAnalysisRespon
     engine: 'llm',
     degraded: false,
     degradeReason: null,
+    scope: { totalBullets: 3, comparedBullets: 2 },
     ...overrides,
   }
 }
@@ -108,7 +109,7 @@ function seedDraft(): void {
 describe('解析 JD 走服务端', () => {
   beforeEach(() => {
     vi.mocked(fetchEngineStatus).mockReset()
-    vi.mocked(fetchEngineStatus).mockResolvedValue({ available: true })
+    vi.mocked(fetchEngineStatus).mockResolvedValue({ available: true, timeoutMs: 30_000 })
     vi.mocked(analyzeJd).mockReset()
     vi.mocked(analyzeJd).mockResolvedValue(analysis())
   })
@@ -161,7 +162,7 @@ describe('解析 JD 走服务端', () => {
 describe('模型没调通时要说清原因', () => {
   beforeEach(() => {
     vi.mocked(fetchEngineStatus).mockReset()
-    vi.mocked(fetchEngineStatus).mockResolvedValue({ available: true })
+    vi.mocked(fetchEngineStatus).mockResolvedValue({ available: true, timeoutMs: 30_000 })
     vi.mocked(analyzeJd).mockReset()
     vi.mocked(analyzeJd).mockResolvedValue(analysis())
   })
@@ -214,7 +215,7 @@ describe('模型没调通时要说清原因', () => {
 describe('生成时的等待提示', () => {
   beforeEach(() => {
     vi.mocked(fetchEngineStatus).mockReset()
-    vi.mocked(fetchEngineStatus).mockResolvedValue({ available: true })
+    vi.mocked(fetchEngineStatus).mockResolvedValue({ available: true, timeoutMs: 30_000 })
     vi.mocked(analyzeJd).mockReset()
     vi.mocked(analyzeJd).mockResolvedValue(analysis())
   })
@@ -273,14 +274,14 @@ describe('生成选项里的模型开关', () => {
   })
 
   it('服务端没配供应商时不显示那个开关', async () => {
-    vi.mocked(fetchEngineStatus).mockResolvedValue({ available: false })
+    vi.mocked(fetchEngineStatus).mockResolvedValue({ available: false, timeoutMs: null })
     const wrapper = await mountJd()
 
     expect(wrapper.text()).not.toContain('本次用模型')
   })
 
   it('配了供应商且账号同意过时默认打开', async () => {
-    vi.mocked(fetchEngineStatus).mockResolvedValue({ available: true })
+    vi.mocked(fetchEngineStatus).mockResolvedValue({ available: true, timeoutMs: 30_000 })
     const wrapper = await mountJd()
     // 账号同意过
     useSessionStore().modelConsentAt = '2026-01-01T00:00:00.000Z'

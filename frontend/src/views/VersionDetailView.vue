@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CopyDocument, Download } from '@element-plus/icons-vue'
 
 import EmptyState from '@/components/EmptyState.vue'
 import ResumePreview from '@/components/ResumePreview.vue'
+import VersionExplainPanel from '@/components/VersionExplainPanel.vue'
 import type { DiffEntry, RequirementCoverage, ResumeVersion, SectionKind } from '@xiaoyi/shared/domain/types'
 import { renderMarkdown } from '@xiaoyi/shared/engines/markdown'
 import { FAILURE_STATES, stateHint, stateMessage, stateTitle } from '@xiaoyi/shared/domain/states'
@@ -15,7 +16,7 @@ const route = useRoute()
 const router = useRouter()
 const versionStore = useVersionStore()
 
-const tab = ref<'preview' | 'body' | 'coverage' | 'diff' | 'uncovered'>('preview')
+const tab = ref<'preview' | 'body' | 'coverage' | 'diff' | 'uncovered' | 'explain'>('preview')
 
 const tierLabel: Record<string, string> = {
   strong: '强覆盖',
@@ -30,6 +31,19 @@ const tierType: Record<string, 'success' | 'warning' | 'info'> = {
 }
 
 const version = computed<ResumeVersion | undefined>(() => versionStore.byId(String(route.params.id)))
+
+/**
+ * 打开详情时去问服务端要一份完整的版本。
+ *
+ * **列表里不带「这一版是怎么来的」**——那条明细只在详情里。手上这份缺它时
+ * 按 id 去问；问回来还是没有的，就是改动之前生成的版本。
+ */
+function loadDetail(id: string): void {
+  void versionStore.ensureDetail(id)
+}
+
+onMounted(() => loadDetail(String(route.params.id)))
+watch(() => route.params.id, (id) => loadDetail(String(id)))
 
 /** 版本分区没有稳定 id，用 kind 补一个，供纸面锚点使用。 */
 const paperSections = computed(() =>
@@ -360,6 +374,10 @@ async function exportPdf(): Promise<void> {
               </template>
             </el-table-column>
           </el-table>
+        </el-tab-pane>
+
+        <el-tab-pane label="这一版是怎么来的" name="explain">
+          <VersionExplainPanel :explain="version.explain" @goto-diff="tab = 'diff'" />
         </el-tab-pane>
       </el-tabs>
     </template>

@@ -297,3 +297,82 @@ describe('模型生成器', () => {
     expect(result.trace.completionTokens).toBe(60)
   })
 })
+
+describe('模型改写后的正文', () => {
+  it('带禁用词的改写不会交付给用户', async () => {
+    const version = await baseline()
+    const key = ordinalOf(version, 'item-1-b1')
+    const chat = chatReturning(
+      JSON.stringify({
+        bullets: [
+          { key: String(key), clauses: [1, 2], text: '负责 Vue 3 与 Vite 的面试与八股题整理' },
+        ],
+      }),
+    )
+
+    const result = await createLlmGenerator({ chat, model: 'test-model' }).generate(DRAFT, JD, CTX)
+
+    // 事实校验先拦下这条改写（里面的词在简历里没有依据），
+    // 版本正文再过一遍禁用词检查——两道防线，用户看不到带禁用词的正文
+    expect(result.version.body).not.toContain('八股')
+    expect(result.version.body).not.toContain('面试')
+  })
+
+  it('改正文里没有禁用词时照常交付', async () => {
+    const version = await baseline()
+    const key = ordinalOf(version, 'item-1-b1')
+    const chat = chatReturning(
+      JSON.stringify({
+        bullets: [
+          { key: String(key), clauses: [1, 2], text: '引入 Vue 3 与 Vite，主导活动平台前端架构升级' },
+        ],
+      }),
+    )
+
+    const result = await createLlmGenerator({ chat, model: 'test-model' }).generate(DRAFT, JD, CTX)
+
+    expect(result.version.integrity.generator).toBe('llm')
+    expect(result.version.body).toContain('引入 Vue 3 与 Vite，主导活动平台前端架构升级')
+  })
+})
+
+describe('改动对照标出正文是谁写的', () => {
+  it('模型改过的要点标为模型写的', async () => {
+    const version = await baseline()
+    const key = ordinalOf(version, 'item-1-b1')
+    const chat = chatReturning(
+      JSON.stringify({
+        bullets: [
+          { key: String(key), clauses: [1, 2], text: '引入 Vue 3 与 Vite，主导活动平台前端架构升级' },
+        ],
+      }),
+    )
+
+    const result = await createLlmGenerator({ chat, model: 'test-model' }).generate(DRAFT, JD, CTX)
+    const entry = result.version.diff.find((item) => item.bulletId === 'item-1-b1')
+
+    expect(entry?.writtenBy).toBe('model')
+  })
+
+  it('规则写的要点标为规则写的', async () => {
+    const result = await rulesGenerator.generate(DRAFT, JD, CTX)
+    const entry = result.version.diff.find((item) => item.bulletId === 'item-1-b1')
+
+    expect(entry?.writtenBy).toBe('rules')
+  })
+})
+
+describe('改写提示词只发已覆盖的要求', () => {
+  it('简历里没有对应事实的要求不发', async () => {
+    let seen = ''
+    const chat: ChatCompletion = async (request) => {
+      seen = request.messages.map((message) => message.content).join('\n')
+      return { text: '{"bullets":[]}' }
+    }
+    await createLlmGenerator({ chat, model: 'test-model' }).generate(DRAFT, JD, CTX)
+
+    // 「有组件库建设经验」在简历里没有对应事实——不发
+    expect(seen).toContain('熟悉 Vue 与 Vite')
+    expect(seen).not.toContain('有组件库建设经验')
+  })
+})

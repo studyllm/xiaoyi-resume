@@ -9,6 +9,7 @@ const CONFIG: LlmConfig = {
   model: 'test-model',
   timeoutMs: 1000,
   maxTokens: 500,
+  maxCandidateBullets: 40,
 }
 
 function jsonResponse(payload: unknown, status = 200): Response {
