@@ -114,6 +114,8 @@ const useLlm = ref(false)
 const degraded = ref(false)
 /** 没完全用上的原因。 */
 const degradeReason = ref<string | null>(null)
+/** 这次比对的范围：简历里共多少条要点、实际比对了多少条。 */
+const scope = ref<{ totalBullets: number; comparedBullets: number } | null>(null)
 
 onMounted(async () => {
   try {
@@ -216,6 +218,7 @@ async function parseJd(): Promise<void> {
     warnings.value = result.warnings
     degraded.value = result.degraded
     degradeReason.value = result.degradeReason
+    scope.value = result.scope
 
     step.value = 1
   } catch (error) {
@@ -346,6 +349,13 @@ watch(
       :title="warning"
     />
 
+    <p v-if="scope" class="text-muted scope-line">
+      这次比对了简历里的 {{ scope.comparedBullets }} 条要点（共 {{ scope.totalBullets }} 条）<template
+        v-if="scope.totalBullets > scope.comparedBullets"
+      >，其余 {{ scope.totalBullets - scope.comparedBullets }} 条与这个岗位无关，没有参与比对</template
+      >。
+    </p>
+
     <el-alert
       v-if="analyzing"
       class="card-block"
@@ -458,5 +468,10 @@ watch(
 
 .model-switch {
   margin-top: var(--space-md);
+}
+
+.scope-line {
+  margin: 0;
+  line-height: 1.8;
 }
 </style>

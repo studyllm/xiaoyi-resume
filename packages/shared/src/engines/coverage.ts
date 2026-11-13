@@ -1,4 +1,4 @@
-import type { Draft, Jd } from '../domain/types'
+import type { Draft, Jd, JdRequirement } from '../domain/types'
 import { findEntryByTerm, matchCatalog } from './catalog'
 import { extractCorePhrases } from './jd'
 import { hasResultSignal } from './signals'
@@ -107,62 +107,75 @@ export function requirementWeakMatch(
   return false
 }
 
+/**
+ * 一条要求在全部要点上匹配得怎么样。
+ *
+ * **单条拆出来**——模型路径只看了部分要点时，要用它在**全部**要点上复核
+ * 那些「模型判为未覆盖」的要求（`jdAnalysis.ts` 的复核环节）。
+ * 规则路径走 `computeCoverage`，它对每条要求调这个函数，产物逐字不变。
+ */
+export function matchRequirement(
+  draft: Draft,
+  requirement: JdRequirement,
+  evidence: BulletEvidence[],
+): RequirementCoverage {
+  const items = draft.sections.flatMap((section) => section.items.map((item) => ({ item })))
+
+  const exactHits = evidence.filter((entry) =>
+    requirement.keywords.some((keyword) => entry.exactTerms.has(keyword)),
+  )
+  const weakHits = evidence.filter(
+    (entry) => entry.exactTerms.size === 0 && requirementWeakMatch(entry, requirement),
+  )
+  const metaHits = items.filter(({ item }) => {
+    const meta = `${item.org ?? ''} ${item.title ?? ''}`
+    return requirement.keywords.some((keyword) => containsTerm(meta, keyword))
+  })
+
+  let tier: CoverageTier = 'none'
+  let reason: UncoveredReason | null = 'no-match'
+  let approximate = false
+
+  if (exactHits.length > 0) {
+    const solid = exactHits.filter((entry) => !entry.planned)
+    if (solid.length === 0) {
+      reason = 'planned-only'
+    } else if (solid.some((entry) => entry.hasResult)) {
+      tier = 'strong'
+      reason = null
+    } else {
+      tier = 'weak'
+      reason = null
+    }
+  } else if (weakHits.length > 0) {
+    const solid = weakHits.filter((entry) => !entry.planned)
+    if (solid.length === 0) {
+      reason = 'planned-only'
+    } else {
+      tier = 'weak'
+      reason = null
+      approximate = weakHits.some((entry) => entry.approxRequirements.has(requirement.id))
+    }
+  } else if (metaHits.length > 0) {
+    tier = 'weak'
+    reason = null
+  }
+
+  return {
+    requirementId: requirement.id,
+    text: requirement.text,
+    keywords: requirement.keywords,
+    tier,
+    approximate,
+    reason,
+    matchedBulletIds: [...exactHits, ...weakHits].map((entry) => entry.bulletId),
+  }
+}
+
 export function computeCoverage(
   draft: Draft,
   jd: Jd,
   evidence: BulletEvidence[],
 ): RequirementCoverage[] {
-  const items = draft.sections.flatMap((section) => section.items.map((item) => ({ item })))
-
-  return jd.requirements.map((requirement) => {
-    const exactHits = evidence.filter((entry) =>
-      requirement.keywords.some((keyword) => entry.exactTerms.has(keyword)),
-    )
-    const weakHits = evidence.filter(
-      (entry) => entry.exactTerms.size === 0 && requirementWeakMatch(entry, requirement),
-    )
-    const metaHits = items.filter(({ item }) => {
-      const meta = `${item.org ?? ''} ${item.title ?? ''}`
-      return requirement.keywords.some((keyword) => containsTerm(meta, keyword))
-    })
-
-    let tier: CoverageTier = 'none'
-    let reason: UncoveredReason | null = 'no-match'
-    let approximate = false
-
-    if (exactHits.length > 0) {
-      const solid = exactHits.filter((entry) => !entry.planned)
-      if (solid.length === 0) {
-        reason = 'planned-only'
-      } else if (solid.some((entry) => entry.hasResult)) {
-        tier = 'strong'
-        reason = null
-      } else {
-        tier = 'weak'
-        reason = null
-      }
-    } else if (weakHits.length > 0) {
-      const solid = weakHits.filter((entry) => !entry.planned)
-      if (solid.length === 0) {
-        reason = 'planned-only'
-      } else {
-        tier = 'weak'
-        reason = null
-        approximate = weakHits.some((entry) => entry.approxRequirements.has(requirement.id))
-      }
-    } else if (metaHits.length > 0) {
-      tier = 'weak'
-      reason = null
-    }
-
-    return {
-      requirementId: requirement.id,
-      text: requirement.text,
-      keywords: requirement.keywords,
-      tier,
-      approximate,
-      reason,
-      matchedBulletIds: [...exactHits, ...weakHits].map((entry) => entry.bulletId),
-    }
-  })
+  return jd.requirements.map((requirement) => matchRequirement(draft, requirement, evidence))
 }

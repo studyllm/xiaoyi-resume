@@ -271,6 +271,8 @@ export function generateVersion(
           sectionTitle: entry.section.title,
           itemId: entry.item.id,
           itemLabel: itemLabel(entry.item),
+          // 规则引擎写的。模型改过的会在 `applyPatchedDiff` 里换成 'model'
+          writtenBy: 'rules' as const,
         }
 
         if (entry.droppedWhole) {

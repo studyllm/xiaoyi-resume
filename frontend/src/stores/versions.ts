@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 
 import type { ResumeVersion } from '@xiaoyi/shared/domain/types'
 import type { GenerateOptions } from '@xiaoyi/shared/engines/types'
-import { createVersion, deleteVersion, fetchVersions } from '@/api/resume'
+import { createVersion, deleteVersion, fetchVersion, fetchVersions } from '@/api/resume'
 import { persistence, versionsKey } from './persistence'
 import { useDraftStore } from './draft'
 import { useSessionStore } from './session'
@@ -108,5 +108,28 @@ export const useVersionStore = defineStore('versions', () => {
     return versions.value.find((version) => version.id === id)
   }
 
-  return { versions, count, restore, generate, remove, byId }
+  /**
+   * 取一个版本的详情。
+   *
+   * **列表里不带「这一版是怎么来的」**——那条明细只在详情里。列表上的副本
+   * 缺它时，按 id 去问服务端要一份；老版本本来就没有，问回来还是没有，
+   * 界面显示「这一版生成时没有记录生成过程」。
+   */
+  async function ensureDetail(id: string): Promise<ResumeVersion | undefined> {
+    const cached = byId(id)
+    if (cached?.explain) return cached
+
+    try {
+      const result = await fetchVersion(id)
+      versions.value = versions.value.map((version) =>
+        version.id === result.version.id ? result.version : version,
+      )
+      return result.version
+    } catch {
+      // 问不到就用手上这份——离线时至少还能看
+      return cached
+    }
+  }
+
+  return { versions, count, restore, generate, remove, byId, ensureDetail }
 })

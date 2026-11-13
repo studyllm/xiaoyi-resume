@@ -69,5 +69,6 @@ declare module 'vue' {
     SidebarFilters: typeof import('./../components/SidebarFilters.vue')['default']
     StructureFindingsPanel: typeof import('./../components/StructureFindingsPanel.vue')['default']
     UnsavedChangesDialog: typeof import('./../components/UnsavedChangesDialog.vue')['default']
+    VersionExplainPanel: typeof import('./../components/VersionExplainPanel.vue')['default']
   }
 }

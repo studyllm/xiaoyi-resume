@@ -112,6 +112,35 @@ export interface StoredEvidence {
 }
 
 /**
+ * 一次模型调用的记录。
+ *
+ * **给用户看的**——「模型是谁、发了什么、贵不贵、多久」。`generations` 表里
+ * 已经有这些数据，这里把它随分析结果一起带到界面上。
+ */
+export interface JdAnalysisCall {
+  model: string
+  promptVersion: string
+  /** 这次发给了模型多少条要点。 */
+  bulletsSent: number
+  promptTokens: number
+  completionTokens: number
+  degraded: boolean
+  degradeReason: string | null
+}
+
+/**
+ * 候选筛选的结果。
+ *
+ * **给用户看的**——「哪条要点参与了比对、哪条没有、为什么」。
+ */
+export interface JdAnalysisSelection {
+  /** 参与比对的要点 id。 */
+  comparedBulletIds: string[]
+  /** 没参与比对的要点与原因。 */
+  dropped: { bulletId: string; reason: string }[]
+}
+
+/**
  * 一份 JD 比对的结果。
  *
  * **三样东西缺一不可**：`jd` 带着带 id 的要求（未覆盖清单要按 id 回查原文），
@@ -128,6 +157,14 @@ export interface JdAnalysis {
   degraded: boolean
   /** 没完全用上的原因。界面要能说清「为什么」。 */
   degradeReason?: string | null
+  /** 这次模型调用的记录。规则路径没有。 */
+  call?: JdAnalysisCall | null
+  /** 候选筛选的结果。规则路径没有筛选，全部要点都参与了比对。 */
+  selection?: JdAnalysisSelection | null
+  /** 这次参与比对的要点条数。改动之前缓存的比对结果没有这个键。 */
+  bulletsCompared?: number
+  /** 简历里的要点总数。 */
+  bulletsTotal?: number
 }
 
 /** 落库的形状：`evidence` 摊平了，其余一样。 */
@@ -139,6 +176,12 @@ export interface StoredJdAnalysisPayload {
   engine: 'rules' | 'llm'
   degraded: boolean
   degradeReason: string | null
+  /** 改动之前缓存的比对结果没有这个键，按缺省处理。 */
+  call?: JdAnalysisCall | null
+  /** 改动之前缓存的比对结果没有这个键，按缺省处理。 */
+  selection?: JdAnalysisSelection | null
+  bulletsCompared?: number
+  bulletsTotal?: number
 }
 
 export interface JdAnalysisResult extends JdAnalysis {
@@ -147,8 +190,11 @@ export interface JdAnalysisResult extends JdAnalysis {
   promptVersion: string | null
   promptTokens: number
   completionTokens: number
+  /** 这次参与比对的要点条数。 */
+  bulletsCompared: number
+  /** 简历里的要点总数。 */
+  bulletsTotal: number
 }
-
 /**
  * JD 比对的端口。
  *

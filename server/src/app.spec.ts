@@ -155,14 +155,14 @@ describe('引擎状态', () => {
     })
     const response = await app.inject({ method: 'GET', url: '/api/v1/engine' })
     expect(response.statusCode).toBe(200)
-    expect(response.json()).toEqual({ available: false })
+    expect(response.json()).toEqual({ available: false, timeoutMs: null })
   })
 
-  it('配了供应商时说有模型，但不回模型 id', async () => {
+  it('配了供应商时说有模型，但不回模型 id，并下发等待上限', async () => {
     const app = buildApp({
       generator: rulesGenerator,
       analyzer: rulesJdAnalyzer,
-      llm: { model: 'test-model' },
+      llm: { model: 'test-model', timeoutMs: 30_000 },
       store: createMemoryStore(),
       idempotency: createMemoryIdempotencyStore(),
       mailer: createMemoryMailer(),
@@ -171,6 +171,6 @@ describe('引擎状态', () => {
       log: false,
     })
     const response = await app.inject({ method: 'GET', url: '/api/v1/engine' })
-    expect(response.json()).toEqual({ available: true })
+    expect(response.json()).toEqual({ available: true, timeoutMs: 30_000 })
   })
 })

@@ -160,6 +160,21 @@ describe('JD 比对的端点', () => {
     expect(body.degraded).toBe(false)
   })
 
+  it('响应里带这次比对的范围', async () => {
+    const h = harness()
+    const cookie = await withDraft(h)
+    const response = await h.app.inject({
+      method: 'POST',
+      url: '/api/v1/jd/analyze',
+      cookies: { session: cookie },
+      payload: { jdText: JD },
+    })
+
+    const body = response.json()
+    expect(body.scope.totalBullets).toBeGreaterThan(0)
+    expect(body.scope.comparedBullets).toBe(body.scope.totalBullets)
+  })
+
   it('同一份输入只算一次', async () => {
     const h = harness()
     const cookie = await withDraft(h)

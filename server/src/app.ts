@@ -43,8 +43,8 @@ export interface AppDeps {
    * 路由不关心用的是哪个。
    */
   analyzer: JdAnalyzer
-  /** 配了模型供应商就给出模型 id，没配就是 null。 */
-  llm: { model: string } | null
+  /** 配了模型供应商就给出模型 id 与单次调用的超时，没配就是 null。 */
+  llm: { model: string; timeoutMs: number } | null
 }
 
 /**

@@ -61,7 +61,7 @@ export function fetchVersion(id: string, signal?: AbortSignal): Promise<{ versio
   return api<{ version: ResumeVersion }>(`/api/v1/versions/${id}`, { signal })
 }
 
-export function createVersion(input: {
+export async function createVersion(input: {
   jdText: string
   name?: string
   options?: {
@@ -76,6 +76,8 @@ export function createVersion(input: {
     method: 'POST',
     body: input,
     idempotencyKey: input.idempotencyKey,
+    // 生成这一步最多两次模型调用：比对与改写
+    timeoutMs: await clientTimeoutMs(2),
   })
 }
 
@@ -108,9 +110,46 @@ export function importLocalDraft(input: {
  * 服务端有没有配模型供应商。
  *
  * 没配的时候，前端那个「本次用模型」的开关不显示——按了没反应比不显示更让人困惑。
+ *
+ * `timeoutMs` 是服务端下发的等待上限——两边各写一个数迟早会脱节。
  */
-export function fetchEngineStatus(signal?: AbortSignal): Promise<{ available: boolean }> {
-  return api<{ available: boolean }>('/api/v1/engine', { signal })
+export function fetchEngineStatus(
+  signal?: AbortSignal,
+): Promise<{ available: boolean; timeoutMs: number | null }> {
+  return api<{ available: boolean; timeoutMs: number | null }>('/api/v1/engine', { signal })
+}
+
+/**
+ * 服务端下发的单次模型调用上限。
+ *
+ * **问一次就够**——它是部署配置，不会在一次会话里变。
+ */
+let engineTimeout: Promise<number | null> | null = null
+
+function engineTimeoutMs(): Promise<number | null> {
+  if (!engineTimeout) {
+    engineTimeout = fetchEngineStatus()
+      .then((status) => status.timeoutMs)
+      .catch(() => null)
+  }
+  return engineTimeout
+}
+
+/**
+ * 客户端等待上限。
+ *
+ * **服务端说等多久，客户端就等多久**——两边各写一个数迟早会脱节，
+ * 契约里那个「30 秒」会把每一次真实的模型调用都掐掉。
+ *
+ * `calls` 是这个请求最多会发起几次模型调用：比对一次，生成最多两次
+ * （比对 + 改写）。余量留给规则计算与网络。
+ */
+const CLIENT_TIMEOUT_MARGIN_MS = 60_000
+
+async function clientTimeoutMs(calls: number): Promise<number | undefined> {
+  const serverTimeout = await engineTimeoutMs()
+  if (serverTimeout === null) return undefined
+  return serverTimeout * calls + CLIENT_TIMEOUT_MARGIN_MS
 }
 
 /** 一份 JD 比对的结果。 */
@@ -127,6 +166,8 @@ export interface JdAnalysisResponse {
   degraded: boolean
   /** 没完全用上的原因。 */
   degradeReason: string | null
+  /** 这次比对的范围：简历里共多少条要点、实际比对了多少条。 */
+  scope: { totalBullets: number; comparedBullets: number }
 }
 
 /**
@@ -137,13 +178,14 @@ export interface JdAnalysisResponse {
  * 同一份简历与同一份 JD 重复解析时，服务端直接返回第一次的结果，
  * 不会重复调模型（`docs/api-contract.md` §6）。
  */
-export function analyzeJd(
+export async function analyzeJd(
   jdText: string,
   options?: { useLlm?: boolean },
 ): Promise<JdAnalysisResponse> {
   return api<JdAnalysisResponse>('/api/v1/jd/analyze', {
     method: 'POST',
     body: { jdText, options: { useLlm: options?.useLlm === true } },
+    timeoutMs: await clientTimeoutMs(1),
   })
 }
 

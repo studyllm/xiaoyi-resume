@@ -9,7 +9,8 @@
  */
 import { createIdSeed, type IdSeed } from '../domain/ids'
 import type { Draft, Jd, JdRequirement, RequirementCoverage } from '../domain/types'
-import { collectEvidence, isPlanned } from './coverage'
+import { DEFAULT_MAX_CANDIDATES, selectCandidates } from './candidateSelection'
+import { collectEvidence, isPlanned, matchRequirement } from './coverage'
 import { findForbiddenWords } from './forbidden'
 import type { ChatCompletion, ChatCompletionResponse } from './generator'
 import { evaluateJd } from './generateVersion'
@@ -39,6 +40,10 @@ export function toStoredAnalysis(analysis: JdAnalysis): StoredJdAnalysisPayload 
     engine: analysis.engine,
     degraded: analysis.degraded,
     degradeReason: analysis.degradeReason ?? null,
+    call: analysis.call ?? null,
+    selection: analysis.selection ?? null,
+    bulletsCompared: analysis.bulletsCompared,
+    bulletsTotal: analysis.bulletsTotal,
   }
 }
 
@@ -52,6 +57,10 @@ export function fromStoredAnalysis(payload: StoredJdAnalysisPayload): JdAnalysis
     engine: payload.engine,
     degraded: payload.degraded,
     degradeReason: payload.degradeReason,
+    call: payload.call ?? null,
+    selection: payload.selection ?? null,
+    bulletsCompared: payload.bulletsCompared,
+    bulletsTotal: payload.bulletsTotal,
   }
 }
 
@@ -110,6 +119,7 @@ export const rulesJdAnalyzer: JdAnalyzer = {
     const { jd, warnings } = parseJd(jdText, ctx, seed)
     const coverage = evaluateJd(draft, jd, ctx)
     const evidence = collectEvidence(draft, jd)
+    const totalBullets = evidence.length
 
     return {
       jd,
@@ -123,6 +133,9 @@ export const rulesJdAnalyzer: JdAnalyzer = {
       promptVersion: null,
       promptTokens: 0,
       completionTokens: 0,
+      // 规则路径看的是全部要点
+      bulletsCompared: totalBullets,
+      bulletsTotal: totalBullets,
     }
   },
 }
@@ -133,6 +146,8 @@ export interface LlmJdAnalyzerDeps {
   /** 单次调用的输出 token 上限。成本护栏的第一道闸。 */
   maxTokens?: number
   temperature?: number
+  /** 最多发多少条要点给模型。裁剪只影响模型能看到什么。 */
+  maxCandidateBullets?: number
 }
 
 /**
@@ -145,6 +160,7 @@ export function createLlmJdAnalyzer(deps: LlmJdAnalyzerDeps): JdAnalyzer {
   const { chat, model } = deps
   const maxTokens = deps.maxTokens ?? 4000
   const temperature = deps.temperature ?? 0
+  const maxCandidateBullets = deps.maxCandidateBullets ?? DEFAULT_MAX_CANDIDATES
 
   return {
     async analyze(draft, jdText, ctx, options = {}) {
@@ -155,7 +171,15 @@ export function createLlmJdAnalyzer(deps: LlmJdAnalyzerDeps): JdAnalyzer {
         return rulesJdAnalyzer.analyze(draft, jdText, ctx)
       }
 
-      const bullets = toPromptBullets(draft)
+      const seed = createIdSeed()
+
+      // 规则先在**全部**要点上算一遍相关度——模型只看挑出来的那一份，
+      // 但系统的判定始终基于全部要点。
+      const { jd: rulesJd } = parseJd(jdText, ctx, seed)
+      const allEvidence = collectEvidence(draft, rulesJd)
+      const selection = selectCandidates(allEvidence, { maxCandidates: maxCandidateBullets })
+      const candidateIds = new Set(selection.candidates.map((entry) => entry.bulletId))
+      const bullets = toPromptBullets(draft, { includeBulletIds: candidateIds })
       const prompt = buildJdAnalysisPrompt({ jdText, bullets })
 
       let raw: string
@@ -175,15 +199,24 @@ export function createLlmJdAnalyzer(deps: LlmJdAnalyzerDeps): JdAnalyzer {
         promptTokens = response.promptTokens ?? 0
         completionTokens = response.completionTokens ?? 0
       } catch (error) {
-        return rulesOutcome(draft, jdText, ctx, messageOf(error))
+        return rulesOutcome(draft, jdText, ctx, messageOf(error), {
+          model,
+          bulletsSent: bullets.length,
+          promptTokens: 0,
+          completionTokens: 0,
+        })
       }
 
       const parsed = parseModelRequirements(raw)
       if (!parsed) {
-        return rulesOutcome(draft, jdText, ctx, '模型返回的内容无法解析')
+        return rulesOutcome(draft, jdText, ctx, '模型返回的内容无法解析', {
+          model,
+          bulletsSent: bullets.length,
+          promptTokens,
+          completionTokens,
+        })
       }
 
-      const seed = createIdSeed()
       const verified = verifyModelRequirements(parsed, {
         jdText,
         bullets,
@@ -193,12 +226,21 @@ export function createLlmJdAnalyzer(deps: LlmJdAnalyzerDeps): JdAnalyzer {
 
       // 一条都没核对上 → 这次比对没有结果，用规则目录重来
       if (verified.coverage.length === 0) {
-        return rulesOutcome(draft, jdText, ctx, '模型给出的要求都没能在 JD 原文中核对上')
+        return rulesOutcome(draft, jdText, ctx, '模型给出的要求都没能在 JD 原文中核对上', {
+          model,
+          bulletsSent: bullets.length,
+          promptTokens,
+          completionTokens,
+        })
       }
+
+      // 模型只看到了候选要点。它判「未覆盖」的要求，要在**全部**要点上
+      // 用规则目录复核一次——否则未覆盖清单会因为裁剪而出现假阴性。
+      const coverage = recheckUncovered(draft, verified)
 
       return {
         jd: verified.jd,
-        coverage: verified.coverage,
+        coverage,
         evidence: verified.evidence,
         warnings: verified.warnings,
         engine: 'llm',
@@ -208,9 +250,58 @@ export function createLlmJdAnalyzer(deps: LlmJdAnalyzerDeps): JdAnalyzer {
         promptVersion: PROMPT_VERSION,
         promptTokens,
         completionTokens,
+        bulletsCompared: bullets.length,
+        bulletsTotal: selection.totalBullets,
+        selection: {
+          comparedBulletIds: selection.candidates.map((entry) => entry.bulletId),
+          dropped: selection.dropped,
+        },
+        call: {
+          model,
+          promptVersion: PROMPT_VERSION,
+          bulletsSent: bullets.length,
+          promptTokens,
+          completionTokens,
+          degraded: false,
+          degradeReason: null,
+        },
       }
     },
   }
+}
+
+/**
+ * 模型判「未覆盖」的要求，在全部要点上用规则目录复核一次。
+ *
+ * **裁剪只影响模型能看到什么，不影响系统能判定什么**——规则也匹配不到才算
+ * 真的未覆盖；规则匹配到的降为弱覆盖，并标注为按关键词近似匹配。
+ *
+ * **证据按模型给的要求重算**——`approxRequirements` 是按要求 id 记的，
+ * 拿规则目录那批要求的 id 去查模型的要求，对不上。
+ */
+function recheckUncovered(
+  draft: Draft,
+  verified: VerifiedRequirements,
+): RequirementCoverage[] {
+  const allEvidence = collectEvidence(draft, verified.jd)
+  const requirementById = new Map(verified.jd.requirements.map((r) => [r.id, r]))
+
+  return verified.coverage.map((entry) => {
+    if (entry.tier !== 'none') return entry
+    const requirement = requirementById.get(entry.requirementId)
+    if (!requirement) return entry
+
+    const rule = matchRequirement(draft, requirement, allEvidence)
+    if (rule.tier === 'none') return entry
+
+    return {
+      ...entry,
+      tier: 'weak',
+      approximate: true,
+      reason: null,
+      matchedBulletIds: rule.matchedBulletIds,
+    }
+  })
 }
 
 /** 模型整体不可用：整份用规则目录匹配，并说清原因。 */
@@ -219,12 +310,22 @@ async function rulesOutcome(
   jdText: string,
   ctx: EngineContext,
   reason: string,
+  call: { model: string; bulletsSent: number; promptTokens: number; completionTokens: number },
 ): Promise<JdAnalysisResult> {
   const result = await rulesJdAnalyzer.analyze(draft, jdText, ctx)
   return {
     ...result,
     degraded: true,
     degradeReason: reason,
+    call: {
+      model: call.model,
+      promptVersion: PROMPT_VERSION,
+      bulletsSent: call.bulletsSent,
+      promptTokens: call.promptTokens,
+      completionTokens: call.completionTokens,
+      degraded: true,
+      degradeReason: reason,
+    },
   }
 }
 
@@ -256,6 +357,11 @@ function verifyModelRequirements(
   const warnings: string[] = []
   const normalizedJd = normalizeText(jdText)
 
+  // **按序号查，不是按数组下标**——候选要点保留了整份简历里的原序号，
+  // 数组下标与序号对不上。模型引用了没发给它的序号，在这里就查不到，
+  // 按越界丢掉那条要求，不会错挂到别的要点上。
+  const bulletsByOrdinal = new Map(bullets.map((bullet) => [bullet.ordinal, bullet]))
+
   const requirements: JdRequirement[] = []
   const coverage: RequirementCoverage[] = []
   /** 要点 id → 命中它的要求条数。相关度按这个算。 */
@@ -283,7 +389,7 @@ function verifyModelRequirements(
     // 3. 引用的要点序号必须指向真实存在的要点
     const matchedBulletIds: string[] = []
     for (const ordinal of entry.bullets) {
-      const bullet = bullets[ordinal - 1]
+      const bullet = bulletsByOrdinal.get(ordinal)
       if (!bullet) {
         outOfRange += 1
         continue
