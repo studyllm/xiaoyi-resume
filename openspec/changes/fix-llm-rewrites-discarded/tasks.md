@@ -2,24 +2,25 @@
 
 ## 1. 共享包 · 让模型的改写能被采用
 
-- [ ] 1.1 `packages/shared/src/engines/llmPrompt.ts`：系统提示第 6 条写明「clauses 填的是这条要点自己的子句编号，从 1 开始，不要跨要点累加」；每条子句行改成「本要点的子句 N：…」（D1）。验收：提示词里能看出编号属于哪条要点。[自动化验收]
-- [ ] 1.2 `packages/shared/src/engines/generator.ts`：模型给的编号在这条要点里查不到时，编号落在**这次请求的事实总数之内**就改用这条要点自己的全部事实复核，并记一条 `clause-index-missed` 观察；编号比事实总数还大就照旧判「没指出依据」丢掉（D2）。验收：编号指到别处时改写被采用；编号是编的时改写被换回，异常类型是 `unreferenced`。[自动化验收]
-- [ ] 1.3 `packages/shared/src/engines/ledger.ts`：抽出 `stripRatedAndVerbs`，`extractComponents` 与 `draftTermsOf` 用**同一个**函数——两边口径一致，动词开头的要点不再被误判成「底稿里没有这个词」（D3）。验收：动词开头的要点改写后能对上底稿；动词与评级的强度判定不变。[自动化验收]
-- [ ] 1.4 `packages/shared/src/engines/transforms.ts`：新增 `normalizeModelText`——去项目符号、统一半角与技术词大小写、整理空格、去掉句末标点。**不动词、不动语序**（D4）。验收：模型写的正文与规则写的正文排版一致；动词没被改动。[自动化验收]
-- [ ] 1.5 `packages/shared/src/engines/generator.ts`：模型写的正文先进 `normalizeModelText`，再进事实校验，也用归一后的文本入库（D4）。验收：入库的正文不带句末句号，与规则路径一致。[自动化验收]
-- [ ] 1.6 补 `packages/shared/src/engines/generator.spec.ts` 与 `ledger.spec.ts`：编号指到别处时被采用、编号是编的时被换回、动词开头的要点不被误判、模型正文排版对齐。验收：见 1.2–1.5。[自动化验收]
+- [x] 1.1 `packages/shared/src/engines/llmPrompt.ts`：系统提示第 6 条写明「clauses 填的是这条要点自己的子句编号，从 1 开始，不要跨要点累加」；每条子句行改成「本要点的子句 N：…」（D1）。验收：提示词里能看出编号属于哪条要点。[自动化验收]
+- [x] 1.2 `packages/shared/src/engines/generator.ts`：模型给的编号在这条要点里查不到时，编号落在**这次请求的事实总数之内**就改用这条要点自己的全部事实复核，并记一条 `clause-index-missed` 观察；编号比事实总数还大就照旧判「没指出依据」丢掉（D2）。验收：编号指到别处时改写被采用；编号是编的时改写被换回，异常类型是 `unreferenced`。[自动化验收]
+- [x] 1.3 `packages/shared/src/engines/ledger.ts`：抽出 `stripRatedAndVerbs`，`extractComponents` 与 `draftTermsOf` 用**同一个**函数——两边口径一致，动词开头的要点不再被误判成「底稿里没有这个词」（D3）。验收：动词开头的要点改写后能对上底稿；动词与评级的强度判定不变。[自动化验收]
+- [x] 1.4 `packages/shared/src/engines/transforms.ts`：新增 `normalizeModelText`——去项目符号、统一半角与技术词大小写、整理空格、去掉句末标点。**不动词、不动语序**（D4）。验收：模型写的正文与规则写的正文排版一致；动词没被改动。[自动化验收]
+- [x] 1.5 `packages/shared/src/engines/generator.ts`：模型写的正文先进 `normalizeModelText`，再进事实校验，也用归一后的文本入库（D4）。验收：入库的正文不带句末句号，与规则路径一致。[自动化验收]
+- [x] 1.6 `packages/shared/src/engines/llmPrompt.ts`：改写提示词第 5 条从「改写幅度越小越好」改成「可以调整语序，把与这个岗位最相关的内容放在最前面，改写幅度要看得出来」，并补一条「不要添加原文里没有的词」（D6）。验收：模型改写后的文字与原文有实质差别，不是只换标点。[浏览器验收]
+- [x] 1.7 补 `packages/shared/src/engines/generator.spec.ts` 与 `ledger.spec.ts`：编号指到别处时被采用、编号是编的时被换回、动词开头的要点不被误判、模型正文排版对齐。验收：见 1.2–1.5。[自动化验收]
 
 ## 2. 服务端 · 输出 token 上限
 
-- [ ] 2.1 `server/src/llm/config.ts`：`DEFAULT_MAX_TOKENS` 从 2000 提到 32000，并写清为什么是「一整版简历」的量级而不是「一次问答」的量级（D5）。验收：默认配置下不会因为输出被截断而整版回落。[自动化验收]
+- [x] 2.1 `server/src/llm/config.ts`：`DEFAULT_MAX_TOKENS` 从 2000 提到 32000，并写清为什么是「一整版简历」的量级而不是「一次问答」的量级（D5）。验收：默认配置下不会因为输出被截断而整版回落。[自动化验收]
 
 ## 3. 文档
 
-- [ ] 3.1 `server/.env.example`：写清「只配供应商地址与密钥、不调输出上限也会被截断」，把实测值 32000 的理由说清。验收：人工核对。[浏览器验收]
+- [x] 3.1 `server/.env.example`：写清「只配供应商地址与密钥、不调输出上限也会被截断」，把实测值 32000 的理由说清。验收：人工核对。[浏览器验收]
 
 ## 4. 验收与归档
 
-- [ ] 4.1 `npm run verify`（仓库根，两端）全绿。[自动化验收]
-- [ ] 4.2 用**用户那份 77 条要点的真实简历**跑一遍模型路径：模型改写被采用的条数大于 0，被判「没指出依据」与「底稿里没有的词」的条数降到 0。[浏览器验收]
+- [x] 4.1 `npm run verify`（仓库根，两端）全绿。[自动化验收]
+- [x] 4.2 用**用户那份 77 条要点的真实简历**跑一遍模型路径：模型改写 49 / 50 条被采用、校验异常 0 条、27 / 50 条文字实质变了（修之前是 0 条被采用、17 条异常）。[浏览器验收]
 - [ ] 4.3 打开这一版的改动对照，确认模型写的要点与规则写的要点在排版上看不出两套，模型写的那些句子的内容确实是针对这个 JD 的。[浏览器验收]
 - [ ] 4.4 归档：把两份 delta spec 同步进 `openspec/specs/`。[自动化验收]
