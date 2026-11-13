@@ -161,3 +161,117 @@ describe('对外说明', () => {
     expect(readme).not.toContain('底稿')
   })
 })
+
+describe('开发流程的关卡', () => {
+  // AGENTS.md §2.0：需求澄清与系统设计是强制关卡。
+  // 这个守卫让「强制」不靠自觉——每个活跃变更都要说清自己走了哪一关，
+  // 而且填的路径得真实存在。填了不存在的路径等于没走那一关。
+  const changesDir = join(repoRoot, 'openspec/changes')
+  const clarificationsDir = join(repoRoot, 'docs/clarifications')
+  const designsDir = join(repoRoot, 'docs/designs')
+
+  /** 活跃变更 = 不在 archive 下的变更目录。归档的变更不再受关卡约束。 */
+  function activeChanges(): string[] {
+    if (!existsSync(changesDir)) return []
+    return readdirSync(changesDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name !== 'archive')
+      .map((entry) => entry.name)
+  }
+
+  /** 从 proposal.md 里取「- 标签：值」这一行。 */
+  function fieldOf(text: string, label: string): string | null {
+    const match = text.match(new RegExp(`^\\s*[-*]\\s*${label}：\\s*(.+?)\\s*$`, 'm'))
+    return match ? match[1]! : null
+  }
+
+  /** 变更是不是 bug 流程——目录名以 fix- 开头。 */
+  function isBugFlow(change: string): boolean {
+    return change.startsWith('fix-')
+  }
+
+  /** 填的路径必须真实存在，且落在该放的目录里。 */
+  function resolves(reference: string, expectedDir: string): boolean {
+    if (!reference.startsWith(expectedDir)) return false
+    return existsSync(join(repoRoot, reference))
+  }
+
+  it('每个活跃变更都在 proposal.md 里写清重量、澄清文档与系统设计', () => {
+    const problems: string[] = []
+    for (const change of activeChanges()) {
+      const proposalFile = join(changesDir, change, 'proposal.md')
+      if (!existsSync(proposalFile)) continue
+      const text = readFileSync(proposalFile, 'utf-8')
+
+      const weight = fieldOf(text, '重量')
+      if (weight === null) {
+        problems.push(`${change}：proposal.md 没有写「- 重量：重 | 轻」`)
+      } else if (weight !== '重' && weight !== '轻') {
+        problems.push(`${change}：重量只能是「重」或「轻」，实际是「${weight}」`)
+      }
+
+      const clarification = fieldOf(text, '澄清文档')
+      if (clarification === null) {
+        problems.push(`${change}：proposal.md 没有写「- 澄清文档：…」`)
+      } else if (isBugFlow(change)) {
+        // bug 流程豁免澄清，但豁免得说出口。
+        if (clarification !== '无（bug 流程）') {
+          problems.push(`${change}：bug 流程的澄清文档应写「无（bug 流程）」`)
+        }
+      } else if (!resolves(clarification, 'docs/clarifications/')) {
+        problems.push(`${change}：澄清文档「${clarification}」不是 docs/clarifications/ 下真实存在的文件`)
+      }
+
+      const design = fieldOf(text, '系统设计')
+      if (design === null) {
+        problems.push(`${change}：proposal.md 没有写「- 系统设计：…」`)
+      } else if (isBugFlow(change)) {
+        if (design !== '无（bug 流程）') {
+          problems.push(`${change}：bug 流程的系统设计应写「无（bug 流程）」`)
+        }
+      } else if (weight === '重') {
+        if (!resolves(design, 'docs/designs/')) {
+          problems.push(`${change}：重量为「重」但系统设计「${design}」不是 docs/designs/ 下真实存在的文件`)
+        }
+      } else if (design !== '无（轻变更）') {
+        problems.push(`${change}：重量为「轻」时系统设计应写「无（轻变更）」`)
+      }
+    }
+    expect(problems).toEqual([])
+  })
+
+  it('澄清文档的七段齐全', () => {
+    if (!existsSync(clarificationsDir)) return
+    const problems: string[] = []
+    for (const name of readdirSync(clarificationsDir).filter((f) => f.endsWith('.md'))) {
+      const text = readFileSync(join(clarificationsDir, name), 'utf-8')
+      for (const section of ['作用', '解决什么问题', '功能范围', '影响', '实现难度', '是否有必要实现', '对用户的帮助']) {
+        if (!new RegExp(`^##\\s*\\d*\\.?\\s*${section}`, 'm').test(text)) {
+          problems.push(`${name}：缺少「${section}」这一段`)
+        }
+      }
+    }
+    expect(problems).toEqual([])
+  })
+
+  it('系统设计文档的七维齐全', () => {
+    if (!existsSync(designsDir)) return
+    const problems: string[] = []
+    for (const name of readdirSync(designsDir).filter((f) => f.endsWith('.md'))) {
+      const text = readFileSync(join(designsDir, name), 'utf-8')
+      for (const section of [
+        '架构设计',
+        'UI 设计',
+        '前端设计',
+        '后端设计',
+        '数据库设计',
+        '测试设计',
+        '开发任务拆分',
+      ]) {
+        if (!new RegExp(`^##\\s*\\d*\\.?\\s*${section}`, 'm').test(text)) {
+          problems.push(`${name}：缺少「${section}」这一段`)
+        }
+      }
+    }
+    expect(problems).toEqual([])
+  })
+})

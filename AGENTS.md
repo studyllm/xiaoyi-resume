@@ -52,18 +52,93 @@ docs/         产品需求文档
 
 **所有功能与改动先走 OpenSpec，不要直接改代码。**
 
+流程有五道关卡，**顺序固定，前两道是强制的**：
+
 ```
-/opsx:propose   写需求 → 生成 proposal / design / tasks 与 delta specs
-/opsx:apply     按 tasks 实现
-/opsx:archive   变更实现完成后，把 delta spec 合并回 openspec/specs/
-/opsx:explore   想法探索阶段，只讨论不落地
+需求 ──▶ ① 需求澄清 ──▶ ② 系统设计 ──▶ ③ OpenSpec 变更 ──▶ ④ 实现 ──▶ ⑤ 归档
 ```
+
+| 关卡 | 做什么 | 产出 |
+| --- | --- | --- |
+| ① 需求澄清 | 作用、解决的问题、功能范围、影响、实现难度、是否有必要实现、对用户的帮助 | `docs/clarifications/<kebab-case>.md` |
+| ② 系统设计 | 架构设计、UI 设计、前端设计、后端设计、数据库设计、测试设计、开发任务拆分 | `docs/designs/<kebab-case>.md` |
+| ③ OpenSpec 变更 | proposal / design / tasks 与 delta specs | `openspec/changes/<name>/` |
+| ④ 实现 | 按 tasks 实现 | 代码 |
+| ⑤ 归档 | delta spec 合并回 `openspec/specs/` | 主 spec 更新 |
+
+前两道关卡各由一个 skill 承担：
+
+- **`requirement-clarification`**（`.claude/skills/requirement-clarification/`）——七问清单、判据与护栏以它的 SKILL.md 为准。
+- **`system-design`**（`.claude/skills/system-design/`）——七维判据在 SKILL.md，项目地图、冻结点与守卫清单在 `reference/project-map.md`。
+
+### 2.0 两道关卡的强制条件
+
+**① 需求澄清 —— 什么时候必须做**
+
+| 场景 | 澄清 |
+| --- | --- |
+| 新能力、新行为（`openspec/specs/` 里没有规定过的） | **必须** |
+| spec 已规定行为、实现跑偏了 | 豁免——行为基准在 spec 里，走 bug 流程（2.2） |
+| 文档措辞、注释、代码风格 | 豁免 |
+| 澄清结论是「不做」或「缓做」 | 到此为止，不进 ②③ |
+
+**② 系统设计 —— 什么时候必须做**
+
+判据是「**改错了会怎样**」，不是改了多少行。轻重分法（全项目唯一一份）：
+
+| 重 | 轻 |
+| --- | --- |
+| `packages/shared` 的引擎与领域类型 | 样式、布局、颜色 |
+| 服务端接口、错误码、状态表 | 单页内的交互与文案 |
+| 数据库、存档结构与迁移 | 单个组件的局部逻辑 |
+| 前后端契约 | |
+
+拿不准就当重的写。
+
+**这张表只管需求流程**（① 之后）。bug 流程的轻重判断见 2.2 第 3 步——写进 OpenSpec 变更自己的 design.md 即可，不必另出系统设计文档。
+
+| 需求流程里落在哪一档 | 系统设计 |
+| --- | --- |
+| 重 | **必须** |
+| 轻 | 豁免——写进 OpenSpec 变更的 design.md 即可 |
+
+### 2.0.1 三条硬约束
+
+1. **不许跳过直接进 `/opsx:propose`。** 行为没在 spec 里规定过的需求，先有澄清文档；落在重范围的需求，先有设计文档。豁免的情形只有 2.0 两张表里写明的那几种。
+2. **文档之间要能追溯。** proposal 的 Why 要写清引用了哪份澄清文档；design.md 的决策要能追溯到设计文档的哪一节；tasks.md 的每条任务要能追溯到设计文档的任务拆分。**写不出追溯，说明前面那一关没做实。**
+3. **范围变了要回上一关。** 澄清或设计过程中冒出新范围，先回澄清文档改，再往下走——不能把新范围悄悄带进 OpenSpec 变更。
+
+### 2.0.2 关卡信息：写在 proposal.md 里的三行
+
+每个变更的 `proposal.md` 的 `## Why` 段**开头**写这三行，让守卫能校验关卡有没有走：
+
+```
+- 重量：重 | 轻
+- 澄清文档：docs/clarifications/<name>.md | 无（bug 流程）
+- 系统设计：docs/designs/<name>.md | 无（轻变更）
+```
+
+| 行 | 怎么填 |
+| --- | --- |
+| 重量 | 按 §2.0 的轻重表判，写「重」或「轻」。拿不准写「重」。 |
+| 澄清文档 | 需求流程填实际路径；bug 流程（变更名以 `fix-` 开头）填「无（bug 流程）」。 |
+| 系统设计 | 重量是「重」填实际路径；重量是「轻」填「无（轻变更）」。 |
+
+**填的路径必须真实存在**——写了不存在的路径等于没走那一关。
+
+守卫在 `frontend/src/repo-hygiene.spec.ts` 的「开发流程的关卡」那组用例里，它检查：
+
+- 每个活跃变更（不在 `openspec/changes/archive/` 下的）都带那三行；
+- 需求流程的「澄清文档」指向 `docs/clarifications/` 下真实存在的文件，重量为「重」的「系统设计」指向 `docs/designs/` 下真实存在的文件；
+- bug 流程（变更名以 `fix-` 开头）两行都写「无（bug 流程）」——**豁免要写出口**；
+- `docs/clarifications/` 下每份文档的七段齐全，`docs/designs/` 下每份文档的七维齐全。
 
 约定：
 
 - 一个变更一个目录，命名**字母开头**的 kebab-case，如 `landing-page-layout`、`fix-message-box-missing-style`。当前 openspec CLI 拒绝数字开头的变更名，**日期写进 proposal 正文**，不要写进目录名。
 - `openspec/specs/` 是当前生效的行为基准，改动前先读对应 spec；规范与代码冲突时以 spec 为准，并说明差异。
 - 需求来自产品侧（中文），实现前先用一句话复述「用户能做什么」，得到确认再动手。
+- 澄清文档与设计文档**不随变更归档而删**——它们是那次决策的历史依据。归档后留在 `docs/` 下。
 
 ### 2.1 什么时候走哪条流程
 
@@ -71,12 +146,18 @@ docs/         产品需求文档
 | --- | --- |
 | 实现偏离了 `openspec/specs/` 里已生效的行为 | **bug 流程**（2.2） |
 | spec 压根没规定这个行为，还没商量该怎样 | 先 `/opsx:explore` 把行为定下来；定完算 bug 还是算需求 |
-| 新能力、新行为 | `/opsx:propose` 需求流程 |
+| 新能力、新行为 | **① 需求澄清 → ② 系统设计（按重量）→ `/opsx:propose`** |
+| 一条新需求还不清楚值不值得做、做到多大范围 | 先走 `requirement-clarification` skill 澄清，再决定要不要 `/opsx:propose` |
+| 范围已定，但还没想清楚怎么做、怎么拆任务 | 先走 `system-design` skill 出设计，再进 `/opsx:propose` |
 | 文档措辞、注释、代码风格调整 | 不建变更，直接改 |
 
 ### 2.2 修复 bug 的流程
 
 **八步，一步都别跳。**
+
+bug 流程**豁免** §2.0 的 ① 需求澄清与 ② 系统设计——行为基准已经在 `openspec/specs/` 里，
+不需要重新判断要不要做、做到多大范围；重 bug 的设计写进 OpenSpec 变更的 design.md 即可。
+**但豁免的只有这两道**，下面八步一步都别跳。
 
 **第 1 步 · 复现并定位根因**
 
@@ -95,16 +176,12 @@ openspec new change fix-<kebab-case>
 
 **第 3 步 · 分轻重，决定写不写 design.md**
 
-判据是**「改错了会怎样」**，不是改了多少行。
+判据是「**改错了会怎样**」，不是改了多少行——轻重分法见 §2.0 那张表，全项目一份。
 
-| 重（要 design.md） | 轻（不要 design.md） |
-| --- | --- |
-| `packages/shared` 的引擎与领域类型 | 样式、布局、颜色 |
-| 服务端接口、错误码、状态表 | 单页内的交互与文案 |
-| 数据库、存档结构与迁移 | 单个组件的局部逻辑 |
-| 前后端契约 | |
+- **重** → 写 design.md。
+- **轻** → 不写 design.md，但要在 tasks.md 里说清怎么改。
 
-拿不准就当重的写。
+bug 流程**不出**系统设计文档（`docs/designs/`）——重 bug 的设计写进 OpenSpec 变更的 design.md 即可。
 
 **第 4 步 · 写复现用例**
 
