@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 
 import type { Draft, Fact, ResumeVersion } from '../domain/types'
 import {
+  draftTermsOf,
   extractComponents,
   extractFacts,
   extractTerms,
+  makeClaim,
   produceClaims,
   sameContent,
   splitClauses,
+  verifyClaim,
   verifyClaims,
 } from './ledger'
 
@@ -330,5 +333,77 @@ describe('判定', () => {
   it('实质相等忽略空白与标点', () => {
     expect(sameContent('负责 A。', '负责A')).toBe(true)
     expect(sameContent('负责 A', '负责 B')).toBe(false)
+  })
+})
+
+describe('实词比对的两边口径', () => {
+  it('动词开头的要点不会被误判成底稿里没有这个词', () => {
+    // 底稿里是「支持多部门联合演练」，去掉动词后是「多部门联合演练」——
+    // 两边都去才对得上。只去一边就会判成「底稿里没有」。
+    const draft: Draft = {
+      ...DRAFT,
+      sections: [
+        {
+          id: 'section-1',
+          kind: 'experience',
+          title: '工作经历',
+          items: [
+            {
+              id: 'item-1',
+              org: '美团',
+              title: '前端工程师',
+              start: '2021-03',
+              end: '2024-06',
+              present: false,
+              bullets: [
+                {
+                  id: 'bullet-1',
+                  text: '支持多部门联合演练的分布式协同仿真平台,需同时支撑上千仿真实体的低延迟实时协同',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+
+    const facts = extractFacts(draft)
+    const draftTerms = draftTermsOf(draft)
+    const rewritten = '支持多部门联合演练的分布式协同仿真平台，同时支撑上千仿真实体的低延迟实时协同'
+
+    const claim = makeClaim({
+      claimId: 'claim-1',
+      bulletId: 'bullet-1',
+      text: rewritten,
+      operation: 'rewrite',
+      sourceFactIds: facts.map((fact) => fact.factId),
+    })
+    const verdict = verifyClaim(claim, facts, {
+      draftTerms,
+      metadataComponents: extractComponents('美团 前端工程师'),
+    })
+
+    expect(verdict.issues.filter((issue) => issue.kind === 'unsupported-term')).toEqual([])
+    expect(verdict.trusted).toBe(true)
+  })
+
+  it('底稿里真没有的词还是查得出来', () => {
+    const draftTerms = draftTermsOf(DRAFT)
+    const facts = extractFacts(DRAFT)
+
+    const claim = makeClaim({
+      claimId: 'claim-2',
+      bulletId: 'bullet-1',
+      text: '引入了全新的量子计算调度平台',
+      operation: 'rewrite',
+      sourceFactIds: facts.map((fact) => fact.factId),
+    })
+    const verdict = verifyClaim(claim, facts, {
+      draftTerms,
+      metadataComponents: extractComponents('美团 前端工程师'),
+    })
+
+    expect(verdict.issues.some((issue) => issue.kind === 'unsupported-term')).toBe(true)
+    expect(verdict.trusted).toBe(false)
   })
 })

@@ -30,7 +30,7 @@ const SYSTEM = `你是一位简历改写助手。你只能改写给定的要点�
 3. 不得提高职责强度：「参与」「协助」「配合」不能改成「负责」「主导」「牵头」。
 4. 不得提高技能评级：「了解」「熟悉」不能改成「掌握」「精通」。
 5. 尽量用原文的词。改写幅度越小越好。
-6. 每条要点至多输出一次，clauses 写你用到的子句编号。
+6. 每条要点至多输出一次。**clauses 填的是这条要点自己的子句编号，从 1 开始**——要点 5 的子句 1 指要点 5 的第一个子句，不要把编号跨要点累加。
 
 只输出 JSON，不要任何解释：
 {"bullets":[{"key":"1","clauses":[1],"text":"改写后的正文"}]}`
@@ -61,7 +61,9 @@ export function buildRewritePrompt(input: {
   for (const bullet of input.bullets) {
     lines.push(`要点 ${bullet.key}`)
     for (const clause of bullet.clauses) {
-      lines.push(`子句 ${clause.index}：${clause.text}`)
+      // **「本要点的」三个字不能省**——模型会把子句编号当成全局连续的，
+      // 于是引用出来的编号在事实账本里查不到，每条改写都被当成「没指出依据」。
+      lines.push(`本要点的子句 ${clause.index}：${clause.text}`)
     }
     lines.push(`现成的一句：${bullet.baseline}`)
     lines.push('')

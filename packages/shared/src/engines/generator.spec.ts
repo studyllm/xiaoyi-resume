@@ -122,6 +122,19 @@ describe('模型生成器', () => {
     expect(seen).not.toMatch(/[0-9a-f]{16}/)
   })
 
+  it('提示词里说清子句编号是每条要点自己的', async () => {
+    let seen = ''
+    const chat: ChatCompletion = async (request) => {
+      seen = request.messages.map((message) => message.content).join('\n')
+      return { text: '{"bullets":[]}' }
+    }
+    await createLlmGenerator({ chat, model: 'test-model' }).generate(DRAFT, JD, CTX)
+
+    // 模型把编号当成全局连续的，引用出来在事实账本里查不到，每条改写都会被丢掉
+    expect(seen).toContain('本要点的子句 1：')
+    expect(seen).toContain('从 1 开始')
+  })
+
   it('模型改写通过校验就采用模型的正文', async () => {
     const version = await baseline()
     const key = ordinalOf(version, 'item-1-b1')
@@ -374,5 +387,87 @@ describe('改写提示词只发已覆盖的要求', () => {
     // 「有组件库建设经验」在简历里没有对应事实——不发
     expect(seen).toContain('熟悉 Vue 与 Vite')
     expect(seen).not.toContain('有组件库建设经验')
+  })
+})
+
+describe('模型给的依据编号指错了地方', () => {
+  it('编号指到这次请求里的别处时，按这条要点的全部事实复核并采用', async () => {
+    const version = await baseline()
+    const key = ordinalOf(version, 'item-1-b1')
+    // 模型把子句编号当成了全局连续的：这条要点自己没有第 4 条子句，
+    // 但第 4 条在这次请求的事实里确实存在
+    const chat = chatReturning(
+      JSON.stringify({
+        bullets: [{ key: String(key), clauses: [4], text: '引入 Vue 3 与 Vite，主导活动平台前端架构升级' }],
+      }),
+    )
+
+    const result = await createLlmGenerator({ chat, model: 'test-model' }).generate(DRAFT, JD, CTX)
+
+    expect(findBullet(result.version, 'item-1-b1')).toBe('引入 Vue 3 与 Vite，主导活动平台前端架构升级')
+    expect(result.version.integrity.violations.some((v) => v.kind === 'unreferenced')).toBe(false)
+  })
+
+  it('编号在这次请求的事实里也不存在时，照旧换回', async () => {
+    const version = await baseline()
+    const key = ordinalOf(version, 'item-1-b1')
+    const chat = chatReturning(
+      JSON.stringify({
+        bullets: [{ key: String(key), clauses: [99], text: '主导活动平台前端架构升级' }],
+      }),
+    )
+
+    const result = await createLlmGenerator({ chat, model: 'test-model' }).generate(DRAFT, JD, CTX)
+
+    expect(findBullet(result.version, 'item-1-b1')).toBe(
+      '主导活动平台前端架构升级，引入 Vue 3 与 Vite',
+    )
+    expect(result.version.integrity.violations.some((v) => v.kind === 'unreferenced')).toBe(true)
+  })
+
+  it('编号对不上时记一条观察，说明是按整条要点复核的', async () => {
+    const version = await baseline()
+    const key = ordinalOf(version, 'item-1-b1')
+    const chat = chatReturning(
+      JSON.stringify({
+        bullets: [{ key: String(key), clauses: [4], text: '引入 Vue 3 与 Vite，主导活动平台前端架构升级' }],
+      }),
+    )
+
+    const result = await createLlmGenerator({ chat, model: 'test-model' }).generate(DRAFT, JD, CTX)
+
+    expect(
+      result.version.integrity.observations.some((o) => o.kind === 'clause-index-missed'),
+    ).toBe(true)
+  })
+})
+
+describe('模型写的正文跟规则写的排版一致', () => {
+  it('去掉句末标点，与规则路径的产出一样', async () => {
+    const version = await baseline()
+    const key = ordinalOf(version, 'item-1-b1')
+    const chat = chatReturning(
+      JSON.stringify({
+        bullets: [{ key: String(key), clauses: [1, 2], text: '引入 Vue 3 与 Vite，主导活动平台前端架构升级。' }],
+      }),
+    )
+
+    const result = await createLlmGenerator({ chat, model: 'test-model' }).generate(DRAFT, JD, CTX)
+
+    expect(findBullet(result.version, 'item-1-b1')).not.toMatch(/[。．]$/)
+  })
+
+  it('不替模型改动动词', async () => {
+    const version = await baseline()
+    const key = ordinalOf(version, 'item-1-b1')
+    const chat = chatReturning(
+      JSON.stringify({
+        bullets: [{ key: String(key), clauses: [1, 2], text: '引入 Vue 3 与 Vite，主导活动平台前端架构升级' }],
+      }),
+    )
+
+    const result = await createLlmGenerator({ chat, model: 'test-model' }).generate(DRAFT, JD, CTX)
+
+    expect(findBullet(result.version, 'item-1-b1')).toContain('主导')
   })
 })
