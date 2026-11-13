@@ -6,6 +6,7 @@ import type { JdAnalyzer } from '@xiaoyi/shared/engines/types'
 
 import type { MailSender } from './auth/mailer'
 import type { IdempotencyStore } from './db/idempotency'
+import { describeMissingSchema } from './http/errors'
 import { errorDetail, requestIdOf } from './http/logger'
 import type { Store } from './db/store'
 import { registerAuthRoutes } from './routes/auth'
@@ -77,7 +78,17 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.setErrorHandler((error: unknown, request, reply) => {
     // 错误上报只带上下文，不带请求体
-    request.log.error({ requestId: request.id, url: request.url, err: errorDetail(error) }, '请求出错')
+    const detail = errorDetail(error)
+    // 库比代码旧时，原始的 SQL 错误没人能据此行动——补一句能做的
+    const hint = describeMissingSchema(error)
+    request.log.error(
+      {
+        requestId: request.id,
+        url: request.url,
+        err: hint ? { ...detail, message: `${detail.message} —— ${hint}` } : detail,
+      },
+      '请求出错',
+    )
     reply.code(500).send({
       error: { code: 'INTERNAL_ERROR', message: '出了点问题。刷新一下再试。' },
     })
