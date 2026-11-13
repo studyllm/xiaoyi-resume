@@ -22,7 +22,7 @@ export interface OpenAiChatOptions {
 }
 
 interface OpenAiResponse {
-  choices?: { message?: { content?: unknown } }[]
+  choices?: { message?: { content?: unknown }; finish_reason?: string }[]
   usage?: { prompt_tokens?: number; completion_tokens?: number }
 }
 
@@ -57,20 +57,25 @@ async function call(
   config: LlmConfig,
   request: ChatCompletionRequest,
 ): Promise<ChatCompletionResponse> {
-  const response = await fetchImpl(`${config.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: request.model,
-      messages: request.messages,
-      temperature: request.temperature,
-      max_tokens: request.maxTokens,
-    }),
-    signal: AbortSignal.timeout(config.timeoutMs),
-  })
+  let response: Response
+  try {
+    response = await fetchImpl(`${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: request.model,
+        messages: request.messages,
+        temperature: request.temperature,
+        max_tokens: request.maxTokens,
+      }),
+      signal: AbortSignal.timeout(config.timeoutMs),
+    })
+  } catch (error) {
+    throw translateFetchError(error, config)
+  }
 
   if (!response.ok) {
     // **把服务商说的带上。** 只留状态码是不够的：402 与 401 都是「没调通」，
@@ -85,9 +90,16 @@ async function call(
   }
 
   const payload = (await response.json()) as OpenAiResponse
-  const text = payload.choices?.[0]?.message?.content
+  const choice = payload.choices?.[0]
+  const text = choice?.message?.content
   if (typeof text !== 'string' || !text.trim()) {
-    throw new Error('模型返回的内容为空')
+    // 内容空有两种情况：模型压根没写，和写了但被上限截断。
+    // 后者要调大的是输出上限，不是重试能解决的。
+    throw new Error(
+      choice?.finish_reason === 'length'
+        ? `模型输出被截断（上限 ${request.maxTokens} token）。请调大 LLM_MAX_TOKENS。`
+        : '模型返回的内容为空',
+    )
   }
 
   return {
@@ -119,6 +131,26 @@ async function errorDetail(response: Response): Promise<string> {
     // 不是 JSON——退回正文
   }
   return body.trim().slice(0, 300)
+}
+
+/**
+ * 把 fetch 抛的错翻译成能行动的话。
+ *
+ * 超时是最常见的一种，而 Node 给的「The operation was aborted due to timeout」
+ * 没人知道该改什么——实际上要调的是超时上限。
+ *
+ * **保留原来的 name**：重试判定靠它（超时不重试 ✓）。
+ */
+function translateFetchError(error: unknown, config: LlmConfig): Error {
+  if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+    const translated = new Error(
+      `模型响应超时（上限 ${Math.round(config.timeoutMs / 1000)} 秒）。生成一整版简历要更久，请调大 LLM_TIMEOUT_MS。`,
+    )
+    translated.name = error.name
+    translated.cause = error
+    return translated
+  }
+  return error instanceof Error ? error : new Error('模型调用失败')
 }
 
 /**

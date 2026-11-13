@@ -347,7 +347,7 @@ export type WarningState = keyof typeof WARNING_STATES
 export const STATUS_STATES = defineStates({
   'generating-with-model': {
     title: '正在等模型改写',
-    hint: '已等待 {value} 秒。模型要把全部要点改写一遍，通常要 1-2 分钟；调不通时会自动改用规则引擎，结果一样能投。',
+    hint: '已等待 {value} 秒。模型要把全部要点改写一遍，要点越多越慢（大简历要十分钟上下）；调不通时会自动改用规则引擎，结果一样能投。',
   },
   'generating-with-rules': {
     title: '正在生成',

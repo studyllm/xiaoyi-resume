@@ -86,7 +86,7 @@ describe('OpenAI 兼容客户端', () => {
       },
     })
 
-    await expect(chat(REQUEST)).rejects.toThrow(/timeout/)
+    await expect(chat(REQUEST)).rejects.toThrow(/超时/)
     expect(attempts).toBe(1)
   })
 
@@ -127,6 +127,28 @@ describe('OpenAI 兼容客户端', () => {
     })
 
     await expect(chat(REQUEST)).rejects.toThrow(/500.*upstream exploded/)
+  })
+
+  it('超时时说清要调什么', async () => {
+    const chat = createOpenAiChat(CONFIG, {
+      fetchImpl: async () => {
+        const error = new Error('The operation was aborted due to timeout')
+        error.name = 'TimeoutError'
+        throw error
+      },
+    })
+
+    await expect(chat(REQUEST)).rejects.toThrow(/LLM_TIMEOUT_MS/)
+  })
+
+  it('输出被截断时说清是上限不够', async () => {
+    // 内容空有两种：模型没写，和写了但被上限截断。后者要调大的是输出上限。
+    const chat = createOpenAiChat(CONFIG, {
+      fetchImpl: async () =>
+        jsonResponse({ choices: [{ message: { content: '' }, finish_reason: 'length' }] }),
+    })
+
+    await expect(chat(REQUEST)).rejects.toThrow(/LLM_MAX_TOKENS/)
   })
 
   it('模型返回空内容时报错', async () => {
